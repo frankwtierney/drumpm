@@ -29,7 +29,7 @@ function render(slot) {
     k.appendChild(b);
   }
   drawSpectrum($('c' + slot), s);
-  $('play' + slot).disabled = false;
+  $('play' + slot).disabled = $('ear' + slot).disabled = false;
 }
 
 function drawSpectrum(cv, s) {
@@ -108,3 +108,18 @@ $('dl').onclick = () => {
 };
 ['mode', 'fine', 'atk', 'fold'].forEach((id) => $(id).addEventListener('input', update));
 window.__state = state; // for tests
+
+// Ear check: play the sample (optionally pitched down) together with a sine at the detected pitch.
+function earCheck(slot) {
+  const s = state[slot], st = Number($('oct' + slot).value);
+  if (!s?.hz) return;
+  ac.resume();
+  const ch = st ? s.channels.map((c) => varispeed(c, st)) : s.channels;
+  play(ch, s.sr);
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.frequency.value = s.hz * Math.pow(2, st / 12);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1.6);
+}
+$('earA').onclick = () => earCheck('A');
+$('earB').onclick = () => earCheck('B');

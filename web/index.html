@@ -38,8 +38,8 @@
 <main>
   <h1>Drum Pitch Match</h1>
   <div class="row">
-    <div class="card" id="cardA"><div class="label">A: reference (detect pitch)</div><div class="drop" data-slot="A">Drop sample A here, or click</div><div class="pitch" id="pA">-</div><div class="sub" id="sA"></div><div class="peaks" id="kA"></div><canvas id="cA"></canvas><div class="actions"><button class="ghost" id="playA" disabled>Play A</button></div></div>
-    <div class="card" id="cardB"><div class="label">B: sample to retune</div><div class="drop" data-slot="B">Drop sample B here, or click</div><div class="pitch" id="pB">-</div><div class="sub" id="sB"></div><div class="peaks" id="kB"></div><canvas id="cB"></canvas><div class="actions"><button class="ghost" id="playB" disabled>Play B</button></div></div>
+    <div class="card" id="cardA"><div class="label">A: reference (detect pitch)</div><div class="drop" data-slot="A">Drop sample A here, or click</div><div class="pitch" id="pA">-</div><div class="sub" id="sA"></div><div class="peaks" id="kA"></div><canvas id="cA"></canvas><div class="actions"><button class="ghost" id="playA" disabled>Play A</button><button class="ghost" id="earA" disabled>Check by ear</button><select id="octA" title="Play down this many octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div></div>
+    <div class="card" id="cardB"><div class="label">B: sample to retune</div><div class="drop" data-slot="B">Drop sample B here, or click</div><div class="pitch" id="pB">-</div><div class="sub" id="sB"></div><div class="peaks" id="kB"></div><canvas id="cB"></canvas><div class="actions"><button class="ghost" id="playB" disabled>Play B</button><button class="ghost" id="earB" disabled>Check by ear</button><select id="octB" title="Play down this many octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div></div>
   </div>
   <div class="card" style="margin-top:16px">
     <div class="label">Match B to A</div>

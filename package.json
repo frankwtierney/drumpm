@@ -1,0 +1,11 @@
+{
+  "name": "drumpm",
+  "version": "0.1.0",
+  "description": "Detect the pitch of a drum sample and match another sample to it",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/detect.test.mjs",
+    "serve": "node serve.mjs"
+  },
+  "license": "MIT"
+}

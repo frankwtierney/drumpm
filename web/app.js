@@ -50,10 +50,14 @@ function drawSpectrum(cv, s) {
   if (s.hz && s.hz < fmax) { g.strokeStyle = css.getPropertyValue('--accent'); g.lineWidth = 2 * dpr; const px = (s.hz / fmax) * w; g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke(); }
 }
 
+function shiftAmount0() {
+  const { A, B } = state;
+  return matchSemitones(A.hz, B.hz, { foldOctave: $('fold').checked });
+}
 function shiftAmount() {
   const { A, B } = state;
   if (!A?.hz || !B?.hz) return null;
-  return matchSemitones(A.hz, B.hz, { foldOctave: $('fold').checked }) + Number($('fine').value) / 100;
+  return shiftAmount0() + Number($('fine').value) / 100;
 }
 
 let renderToken = 0;
@@ -61,6 +65,10 @@ async function update() {
   $('fineV').textContent = $('fine').value; $('atkV').textContent = $('atk').value;
   const st = shiftAmount();
   if (st === null) { $('shiftInfo').textContent = 'Load both samples'; $('playM').disabled = $('dl').disabled = true; return; }
+  const base = shiftAmount0(), dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
+  const [w2, c2] = cts === 100 ? [whole + 1, 0] : [whole, cts];
+  $('distance').textContent = Math.abs(base) < 0.005 ? 'B is in tune with A'
+    : `B is ${w2} st ${c2} cents ${base < 0 ? 'ABOVE' : 'BELOW'} A (shift ${base < 0 ? 'down' : 'up'})`;
   $('shiftInfo').textContent = `Shift B by ${st >= 0 ? '+' : ''}${st.toFixed(2)} semitones`;
   const token = ++renderToken, B = state.B;
   $('status').textContent = 'Rendering...';

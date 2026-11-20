@@ -35,6 +35,18 @@ const path = require('node:path');
       peak: Math.max(...matched.channels[0].map(Math.abs)) };
   });
   console.log(JSON.stringify(res, null, 1));
+  // tuner: auto-matched should read in tune; dragging the dial off should leave the zone
+  const tuned = await page.evaluate(() => document.getElementById('tuner').dataset.s);
+  const box = await page.locator('#mknob').boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2, r = box.width * 0.4, deg = -55 * Math.PI / 180;
+  await page.mouse.move(cx, cy - r); await page.mouse.down(); await page.mouse.move(cx + r * Math.sin(deg), cy - r * Math.cos(deg), { steps: 5 }); await page.mouse.up();
+  await page.waitForTimeout(400);
+  const off = await page.evaluate(() => ({ s: document.getElementById('tuner').dataset.s, read: document.getElementById('tnRead').textContent, big: document.getElementById('shiftBig').textContent }));
+  console.log('tuner auto:', tuned, '| after drag:', JSON.stringify(off));
+  await page.click('#autoBtn'); await page.waitForTimeout(400);
+  const back = await page.evaluate(() => document.getElementById('tuner').dataset.s);
+  console.log('tuner after auto:', back);
+  if (tuned !== 'tuned' || off.s === 'tuned' || back !== 'tuned') { console.log('FAIL tuner'); process.exit(1); }
   const cents = 1200 * Math.log2(res.hzOut / res.hzA);
   console.log('output vs A error (cents):', cents.toFixed(1));
   await page.screenshot({ path: path.join(dir, 'screenshot.png'), fullPage: true });

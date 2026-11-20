@@ -20,6 +20,7 @@ async function loadFile(slot, file) {
     const channels = Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c).slice());
     const det = detectPitch(channels, buf.sampleRate);
     state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz };
+    manual = null;
     render(slot);
     await update();
   } catch (e) {
@@ -121,7 +122,7 @@ function setMatch(st) { // bipolar dial: -12..+12 st, 0 at 12 o'clock
   $('marc').setAttribute('d', Math.abs(deg) < 0.4 ? '' : `M ${pol(0)} A 76 76 0 0 ${deg > 0 ? 1 : 0} ${pol(deg)}`);
   $('mdot').style.transform = `rotate(${deg}deg)`;
 }
-setMatch(null); setKnob('A', null); setKnob('B', null);
+setMatch(null); setKnob('A', null); setKnob('B', null); setTuner(null);
 
 /* ---------- matching ---------- */
 function shiftAmount0() { return matchSemitones(state.A.hz, state.B.hz, { foldOctave: $('fold').checked }); }
@@ -131,26 +132,51 @@ function styleRanges() {
   set('atk', 0, (Number($('atk').value) / 40) * 100);
 }
 
-let renderToken = 0;
-async function update() {
+let renderToken = 0, manual = null, renderTimer = null;
+const totalShift = () => (manual ?? shiftAmount0()) + Number($('fine').value) / 100;
+
+// Tuner bar: residual = (B after shift) - A, in semitones. Zero = matched.
+function setTuner(res) {
+  const t = $('tuner');
+  if (res === null) { t.dataset.s = 'none'; t.classList.remove('off'); $('tnRead').textContent = '\u2013'; $('tnNeedle').style.left = '50%'; return; }
+  const c = res * 100, a = Math.abs(c), sign = c > 0 ? '+' : '\u2212';
+  t.dataset.s = a <= 5 ? 'tuned' : a <= 15 ? 'near' : 'far';
+  t.classList.toggle('off', a > 50);
+  $('tnNeedle').style.left = 50 + Math.max(-50, Math.min(50, c)) + '%';
+  $('tnRead').innerHTML = a <= 5 ? `${ICON.ok}In tune` : a > 50 ? `${sign}${Math.abs(res).toFixed(2)} st` : `${sign}${a.toFixed(0)}\u00a2 ${c > 0 ? 'sharp' : 'flat'}`;
+}
+
+function setManual(v) { manual = v; update(150); }
+
+async function update(delay = 0) {
   $('fineV').textContent = $('fine').value; $('atkV').textContent = $('atk').value; styleRanges();
-  const { A, B } = state;
-  if (!A?.hz || !B?.hz) {
-    $('shiftBig').textContent = '–'; setMatch(null);
+  const { A, B } = state, ready = !!(A?.hz && B?.hz);
+  $('mknob').classList.toggle('live', ready);
+  $('autoBtn').hidden = !ready;
+  $('autoBtn').classList.toggle('on', manual === null);
+  $('autoT').textContent = manual === null ? 'Auto' : 'Manual \u00b7 reset';
+  if (!ready) {
+    $('shiftBig').textContent = '\u2013'; setMatch(null); setTuner(null); $('tnNote').textContent = '';
     $('distance').innerHTML = `<span class="hint">${!A && !B ? 'Drop a reference (1) and a sample to retune (2)' : !A ? 'Now drop the reference sample (1)' : 'Now drop the sample to retune (2)'}</span>`;
     $('playM').disabled = $('cmp').disabled = $('dl').disabled = $('dragOut').disabled = true; return;
   }
-  const base = shiftAmount0(), st = base + Number($('fine').value) / 100;
+  const base = shiftAmount0(), st = totalShift();
   const dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
   const [w2, c2] = cts === 100 ? [whole + 1, 0] : [whole, cts];
-  $('shiftBig').textContent = (st >= 0 ? '+' : '−') + Math.abs(st).toFixed(2);
-  setMatch(st);
+  $('shiftBig').textContent = (st >= 0 ? '+' : '\u2212') + Math.abs(st).toFixed(2);
+  setMatch(st); setTuner(st - base);
   $('distance').innerHTML = dist < 0.005
     ? `<span class="ar ok">${ICON.ok}</span><span>B is already in tune with A</span>`
-    : `<span class="ar ${base < 0 ? 'dn' : 'up'}">${base < 0 ? ICON.dn : ICON.up}</span><span>B is ${w2} st ${c2}¢ ${base < 0 ? 'above' : 'below'} A<small>Shifting B ${base < 0 ? 'down' : 'up'}</small></span>`;
-
-  const token = ++renderToken;
+    : `<span class="ar ${base < 0 ? 'dn' : 'up'}">${base < 0 ? ICON.dn : ICON.up}</span><span>B is ${w2} st ${c2}\u00a2 ${base < 0 ? 'above' : 'below'} A<small>Needs a shift ${base < 0 ? 'down' : 'up'} of ${Math.abs(base).toFixed(2)} st</small></span>`;
   $('status').classList.add('busy');
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(renderAudio, delay);
+}
+
+async function renderAudio() {
+  const { A, B } = state;
+  if (!A?.hz || !B?.hz) return;
+  const st = totalShift(), token = ++renderToken;
   let out;
   if ($('mode').value === 'stretch') out = await stretchShift(B.channels, B.sr, st);
   else out = B.channels.map((c) => varispeed(c, st));
@@ -160,11 +186,34 @@ async function update() {
   if (state.matched?.url) URL.revokeObjectURL(state.matched.url);
   const blob = encodeWav(out, B.sr);
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
+  const m = detectPitch(out, B.sr);
+  $('tnNote').textContent = m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '';
   $('playM').disabled = $('cmp').disabled = $('dl').disabled = $('dragOut').disabled = false;
   $('dragOut').classList.add('ready');
   $('status').classList.remove('busy');
   window.__renderDone = (window.__renderDone || 0) + 1;
 }
+
+// Dial interaction: drag to set the shift by hand, arrows to nudge, double-click for auto.
+(() => {
+  const mk = $('mknob'); let dragging = false;
+  const ready = () => !!(state.A?.hz && state.B?.hz);
+  const fromEvent = (e) => {
+    const r = mk.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const deg = Math.max(-135, Math.min(135, (Math.atan2(dx, -dy) * 180) / Math.PI));
+    return Math.round((deg / 135) * 120) / 10;
+  };
+  mk.addEventListener('pointerdown', (e) => { if (!ready()) return; dragging = true; mk.setPointerCapture(e.pointerId); setManual(fromEvent(e)); });
+  mk.addEventListener('pointermove', (e) => { if (dragging) setManual(fromEvent(e)); });
+  mk.addEventListener('pointerup', () => { dragging = false; });
+  mk.addEventListener('dblclick', () => { if (ready()) setManual(null); });
+  mk.addEventListener('keydown', (e) => {
+    if (!ready()) return;
+    const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return;
+    e.preventDefault(); setManual(Math.round(((manual ?? shiftAmount0()) + d * (e.shiftKey ? 1 : 0.1)) * 100) / 100);
+  });
+  $('autoBtn').onclick = () => setManual(null);
+})();
 
 /* ---------- playback ---------- */
 function play(channels, sr, when = 0) {
@@ -224,8 +273,8 @@ document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('clic
   document.querySelectorAll('[data-mode]').forEach((o) => o.classList.toggle('on', o === b));
   update();
 }));
-$('fold').addEventListener('change', () => { $('foldL').classList.toggle('on', $('fold').checked); update(); });
-['fine', 'atk'].forEach((id) => $(id).addEventListener('input', update));
+$('fold').addEventListener('change', () => { $('foldL').classList.toggle('on', $('fold').checked); manual = null; update(); });
+['fine', 'atk'].forEach((id) => $(id).addEventListener('input', () => update(150)));
 window.addEventListener('resize', () => ['A', 'B'].forEach((s) => { if (state[s]) { drawWave(s); drawSpectrum(s); } }));
 styleRanges();
 window.__state = state; // for tests

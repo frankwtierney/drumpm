@@ -22,6 +22,9 @@ export async function stretchShift(channels, sr, semitones, { tonalityHz = 8000 
   node.connect(ctx.destination);
   await node.addBuffers(channels);
   node.schedule({ output: 0, active: true, input: 0, rate: 1, semitones, tonalityHz });
+  // Messages to the worklet are async: without a round trip, the offline render can start before it has
+  // received the schedule and come out silent. Port messages are ordered, so awaiting this one is a barrier.
+  await node.dropBuffers(0);
   const buf = await ctx.startRendering();
   return Array.from({ length: channels.length }, (_, c) => buf.getChannelData(c).slice(0, n));
 }

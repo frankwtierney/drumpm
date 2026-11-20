@@ -178,6 +178,7 @@
   .match .verdict { justify-content:flex-start; min-height:0; font-size:14px; align-items:flex-start; }
   .match .verdict > span:last-child { display:block; line-height:1.3; }
   #status { margin-left:auto; width:20px; height:6px; }
+  #loopBtn.on { color:var(--cyan); box-shadow:0 0 14px #4fe3f044, 0 6px 12px -5px #000b, 0 0 0 1px #4fe3f088; }
   /* slimmer tuner */
   .tuner { padding:7px 12px 6px; border-radius:12px; }
   .tn-head { grid-template-columns:auto 1fr auto; gap:8px; font-size:15px; }
@@ -304,6 +305,7 @@
       <div class="actions">
         <button class="play fill" id="playM" disabled><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play matched</button>
         <button id="cmp" disabled title="Plays A, then your matched B"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4"/></svg>A / B</button>
+        <button id="loopBtn" aria-pressed="false" title="Loop: keeps the sample repeating so you can tune by ear. Changes are heard on the next repeat. With Loop on, Play matched and A / B both loop (A / B alternates A, then B). Space starts and stops."><svg class="i" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"/></svg>Loop</button>
         <span id="status"></span>
       </div>
     </section>

@@ -384,13 +384,54 @@ const KEYDIR = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
 })();
 
 /* ---------- playback ---------- */
+const playing = new Map(); // live sources -> their gain node, so a stop can fade instead of clicking
 function play(channels, sr, when = 0, slot = null, tag = '') {
   ac.resume();
   const b = ac.createBuffer(channels.length, channels[0].length, sr);
   channels.forEach((c, i) => b.copyToChannel(c, i));
-  const src = ac.createBufferSource(); src.buffer = b; src.connect(getAnalyser()); src.start(ac.currentTime + when);
+  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; src.connect(g).connect(getAnalyser());
+  playing.set(src, g); src.onended = () => playing.delete(src);
+  src.start(ac.currentTime + when);
   if (slot) rtaStart(slot, ac.currentTime + when, b.duration, tag);
   return b.duration;
+}
+
+/* ---------- looping: keep the sample repeating so changes can be heard as you tune ---------- */
+// Hits are scheduled a little ahead of time on the audio clock. Each one reads state.matched when it is
+// scheduled, so a fresh render is picked up at the next repeat without a gap or a click.
+const LOOP_GAP = 0.2, loop = { kind: null, next: 0, step: 0, timer: 0 };
+window.__loop = { log: [] };
+const PLAY_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>', STOP_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>';
+const AB_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4"/></svg>';
+const loopOn = () => $('loopBtn').getAttribute('aria-pressed') === 'true';
+function syncPlayButtons() {
+  $('playM').innerHTML = loop.kind === 'matched' ? `${STOP_ICON}Stop` : `${PLAY_ICON}Play matched`;
+  $('cmp').innerHTML = loop.kind === 'ab' ? `${STOP_ICON}Stop` : `${AB_ICON}A / B`;
+  $('loopBtn').classList.toggle('on', loopOn());
+}
+function loopHit() {
+  const A = state.A, M = state.matched, when = loop.next - ac.currentTime;
+  if (loop.kind === 'ab' && loop.step % 2 === 0) { if (!A) return null; const d = play(A.channels, A.sr, when, 'A'); window.__loop.log.push('A'); return Math.min(d, 1.2) + 0.15; }
+  if (!M) return null;
+  const d = play(M.channels, M.sr, when, 'B', 'matched'); window.__loop.log.push(M.url);
+  return d + LOOP_GAP;
+}
+function loopTick() {
+  while (loop.kind && loop.next < ac.currentTime + 0.15) {
+    const adv = loopHit();
+    if (adv == null) { loop.next = ac.currentTime + 0.05; break; } // nothing to play yet, try again shortly
+    loop.next += adv; loop.step++;
+  }
+}
+function startLoop(kind) {
+  stopLoop(); ac.resume();
+  loop.kind = kind; loop.next = ac.currentTime + 0.05; loop.step = 0; loop.timer = setInterval(loopTick, 25);
+  loopTick(); syncPlayButtons();
+}
+function stopLoop(now = true) {
+  clearInterval(loop.timer); loop.kind = null;
+  if (now) for (const [src, g] of playing) { g.gain.setTargetAtTime(0, ac.currentTime, 0.008); try { src.stop(ac.currentTime + 0.06); } catch { /* already stopped */ } }
+  syncPlayButtons();
 }
 function earCheck(slot) {
   const s = state[slot], st = Number($('oct' + slot).value);
@@ -403,8 +444,14 @@ function earCheck(slot) {
 }
 $('playA').onclick = () => play(state.A.channels, state.A.sr, 0, 'A');
 $('playB').onclick = () => play(state.B.channels, state.B.sr, 0, 'B');
-$('playM').onclick = () => play(state.matched.channels, state.matched.sr, 0, 'B', 'matched');
-$('cmp').onclick = () => { const d = play(state.A.channels, state.A.sr, 0, 'A'); play(state.matched.channels, state.matched.sr, Math.min(d, 1.2) + 0.15, 'B', 'matched'); };
+$('playM').onclick = () => { if (loopOn()) { loop.kind === 'matched' ? stopLoop() : startLoop('matched'); } else play(state.matched.channels, state.matched.sr, 0, 'B', 'matched'); };
+$('cmp').onclick = () => {
+  if (loopOn()) { loop.kind === 'ab' ? stopLoop() : startLoop('ab'); return; }
+  const d = play(state.A.channels, state.A.sr, 0, 'A'); play(state.matched.channels, state.matched.sr, Math.min(d, 1.2) + 0.15, 'B', 'matched');
+};
+$('loopBtn').onclick = () => { $('loopBtn').setAttribute('aria-pressed', String(!loopOn())); if (!loopOn() && loop.kind) stopLoop(false); syncPlayButtons(); };
+// Space starts and stops the matched sample (a loop when Loop is on), unless a control has focus.
+window.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body && !$('playM').disabled) { e.preventDefault(); $('playM').click(); } });
 $('earA').onclick = () => earCheck('A');
 $('earB').onclick = () => earCheck('B');
 

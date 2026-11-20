@@ -230,7 +230,7 @@ async function update(delay = 0) {
   if (!ready) {
     $('shiftBig').textContent = '\u2013'; setMatch(null); setTuner(null); $('tnNote').textContent = '';
     $('distance').innerHTML = `<span class="hint">${!A && !B ? 'Drop a reference (1) and a sample to retune (2)' : !A ? 'Now drop the reference sample (1)' : 'Now drop the sample to retune (2)'}</span>`;
-    $('playM').disabled = $('cmp').disabled = $('dl').disabled = $('dragOut').disabled = true; return;
+    $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = true; return;
   }
   const base = shiftAmount0(), st = totalShift();
   const dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
@@ -260,7 +260,7 @@ async function renderAudio() {
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
   const m = detectPitch(out, B.sr);
   $('tnNote').textContent = m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '';
-  $('playM').disabled = $('cmp').disabled = $('dl').disabled = $('dragOut').disabled = false;
+  $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = false;
   $('dragOut').classList.add('ready');
   $('status').classList.remove('busy');
   window.__renderDone = (window.__renderDone || 0) + 1;
@@ -273,7 +273,7 @@ async function renderAudio() {
   const fromEvent = (e) => {
     const r = mk.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     const deg = Math.max(-135, Math.min(135, (Math.atan2(dx, -dy) * 180) / Math.PI));
-    return Math.round((deg / 135) * 120) / 10;
+    return Math.round(((deg / 135) * 12 - Number($('fine').value) / 100) * 100) / 100;
   };
   mk.addEventListener('pointerdown', (e) => { if (!ready()) return; dragging = true; mk.setPointerCapture(e.pointerId); setManual(fromEvent(e)); });
   mk.addEventListener('pointermove', (e) => { if (dragging) setManual(fromEvent(e)); });
@@ -313,7 +313,7 @@ $('earA').onclick = () => earCheck('A');
 $('earB').onclick = () => earCheck('B');
 
 /* ---------- export ---------- */
-$('dl').onclick = () => { const a = document.createElement('a'); a.href = state.matched.url; a.download = state.matched.name; a.click(); };
+$('dragOut').onclick = () => { const a = document.createElement('a'); a.href = state.matched.url; a.download = state.matched.name; a.click(); };
 $('dragOut').addEventListener('dragstart', (e) => {
   if (!state.matched) return e.preventDefault();
   e.dataTransfer.effectAllowed = 'copy';

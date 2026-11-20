@@ -39,12 +39,12 @@ function render(slot) {
   $('conf' + slot).dataset.l = !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
   $('confT' + slot).textContent = !d.hz ? 'No pitch found' : d.confidence > 0.75 ? 'Confident' : d.confidence > 0.45 ? 'Fairly sure' : 'Unsure, pick a partial';
   const k = $('k' + slot); k.textContent = '';
-  if ((d.peaks || []).length > 1) {
-    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = 'Partials'; l.title = 'Detected frequency peaks. Click one to use it as the pitch.'; k.appendChild(l);
+  if ((d.peaks || []).length) {
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = 'Pitch candidates:'; l.title = 'Detected frequency peaks. Click one to use it as the pitch.'; k.appendChild(l);
   }
   for (const p of d.peaks || []) {
     const b = document.createElement('button'); b.className = Math.abs(p.hz - s.hz) < 0.01 ? 'sel' : '';
-    b.textContent = p.hz.toFixed(0); b.title = `${p.hz.toFixed(1)} Hz (${p.db.toFixed(0)} dB). Click to use this pitch.`;
+    b.textContent = p.hz.toFixed(0) + ' Hz'; b.title = `${p.hz.toFixed(1)} Hz (${p.db.toFixed(0)} dB). Click to use this pitch.`;
     b.onclick = () => { s.hz = p.hz; Object.assign(s.det, describeHz(p.hz), { hz: p.hz }); render(slot); update(); };
     k.appendChild(b);
   }

@@ -4,55 +4,172 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drum Pitch Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Yellowtail&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#111214; --panel:#1b1d21; --line:#2c2f36; --text:#e8e9ec; --dim:#8b909a; --accent:#ff7a3d; --ok:#5ad19a; }
-  @media (prefers-color-scheme: light) { :root { --bg:#f4f4f1; --panel:#fff; --line:#d9d9d2; --text:#1a1b1e; --dim:#666; --accent:#d9531e; --ok:#16875a; } }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.4 system-ui,sans-serif; }
-  main { max-width:900px; margin:0 auto; padding:24px 16px 48px; }
-  h1 { font-size:20px; margin:0 0 16px; }
-  .row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:640px) { .row { grid-template-columns:1fr; } }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
-  .drop { border:2px dashed var(--line); border-radius:8px; padding:18px; text-align:center; color:var(--dim); cursor:pointer; }
-  .drop.over { border-color:var(--accent); color:var(--text); }
-  .label { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; }
-  .pitch { font-size:34px; font-weight:700; margin:10px 0 0; }
-  .sub { color:var(--dim); font-size:13px; }
-  canvas { width:100%; height:90px; display:block; margin-top:10px; background:var(--bg); border-radius:6px; }
-  button { background:var(--accent); color:#111; border:0; border-radius:6px; padding:8px 14px; font-weight:600; cursor:pointer; }
-  button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
-  button:disabled { opacity:.4; cursor:default; }
-  .controls { margin-top:16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; align-items:end; }
-  label { display:block; font-size:13px; color:var(--dim); }
-  input[type=range], select { width:100%; }
-  .actions { margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; }
-  .peaks { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-  .peaks button { padding:3px 8px; font-size:12px; }
-  .peaks button.sel { background:var(--accent); color:#111; }
-  .big { font-size:22px; font-weight:700; color:var(--ok); }
-  #status { color:var(--dim); font-size:13px; margin-top:12px; min-height:18px; }
+  :root {
+    --orange:#ff8a1f; --cyan:#4fe3f0; --ink:#e9eaf5; --dim:#8d90ab;
+    --deep:#1d2033; --mid:#2c3048; --lift:#4a4b6d;
+    --font:'Michroma', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html { background:radial-gradient(1200px 700px at 70% -10%, #5b5d84 0%, transparent 60%), linear-gradient(160deg,#1a1c2c,#3a3c5a 70%,#4b4d72); min-height:100%; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:28px 14px; color:var(--ink); font:12px/1.4 var(--font); letter-spacing:.06em; }
+  .plugin {
+    width:min(1080px,100%); border-radius:34px; padding:26px 30px 28px; position:relative;
+    background:linear-gradient(135deg,#262a40 0%,#363953 50%,#4d4e72 100%);
+    box-shadow:0 40px 80px -20px #0009, 0 0 0 1px #ffffff10 inset, 0 2px 0 #ffffff18 inset;
+  }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .logo { font:400 40px/1 'Yellowtail', cursive; letter-spacing:0; color:#d9daf0; text-shadow:0 2px 0 #0006; }
+  .logo small { font:400 9px var(--font); letter-spacing:.3em; color:var(--dim); margin-left:10px; text-shadow:none; }
+  .pills { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  .pill, button, select, .toggle {
+    font:inherit; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink);
+    border:0; border-radius:999px; padding:11px 20px; cursor:pointer;
+    background:linear-gradient(180deg,#444763,#2a2d44);
+    box-shadow:0 6px 12px -4px #000a, 0 1px 0 #ffffff25 inset, 0 0 0 1px #0006;
+    transition:box-shadow .15s, color .15s, transform .05s;
+  }
+  button:hover, select:hover, .toggle:hover { color:#fff; }
+  button:active { transform:translateY(1px); box-shadow:0 2px 4px -2px #000a, 0 1px 0 #ffffff25 inset, 0 0 0 1px #0006; }
+  button:disabled { opacity:.35; cursor:default; }
+  button.hot { color:var(--orange); box-shadow:0 0 14px #ff8a1f55, 0 6px 12px -4px #000a, 0 0 0 1px #ff8a1f77; }
+  button.cool { color:var(--cyan); box-shadow:0 0 14px #4fe3f055, 0 6px 12px -4px #000a, 0 0 0 1px #4fe3f077; }
+  select { appearance:none; padding-right:30px; background-image:linear-gradient(180deg,#444763,#2a2d44), conic-gradient(from 0deg at 0 0, transparent 0); }
+  .toggle { display:inline-flex; gap:8px; align-items:center; user-select:none; }
+  .toggle input { display:none; }
+  .toggle:has(input:checked) { color:var(--cyan); box-shadow:0 0 14px #4fe3f055, 0 0 0 1px #4fe3f077; }
+
+  .stage { display:grid; grid-template-columns:1fr minmax(260px,330px) 1fr; gap:10px; align-items:start; margin-top:18px; }
+  @media (max-width:900px) { .stage { grid-template-columns:1fr; } .center { order:3; } }
+
+  .voice { text-align:center; }
+  .tag { font-size:10px; letter-spacing:.3em; color:var(--dim); margin-bottom:6px; }
+  .knob { position:relative; width:min(330px,100%); aspect-ratio:1; margin:0 auto; border-radius:50%; cursor:pointer; }
+  .knob svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .track { fill:none; stroke:#14162299; stroke-width:15; stroke-linecap:round; }
+  .arc { fill:none; stroke-width:15; stroke-linecap:round; transition:stroke-dasharray .45s cubic-bezier(.2,.8,.2,1); }
+  .voice.a .arc { stroke:var(--orange); filter:drop-shadow(0 0 7px #ff8a1fcc); }
+  .voice.b .arc { stroke:var(--cyan); filter:drop-shadow(0 0 7px #4fe3f0cc); }
+  .tick { stroke:#7b7ea1; stroke-width:1.4; stroke-linecap:round; }
+  .ring { fill:none; stroke:#ffffff14; stroke-width:1; }
+  .dot { transition:transform .45s cubic-bezier(.2,.8,.2,1); transform-origin:100px 100px; }
+  .voice.a .dot circle { fill:#2a2c44; stroke:var(--orange); }
+  .voice.b .dot circle { fill:#2a2c44; stroke:var(--cyan); }
+  .cap {
+    position:absolute; inset:25%; border-radius:50%; display:grid; place-content:center; text-align:center;
+    background:radial-gradient(circle at 35% 28%, #4c4f6e, #25283d 72%);
+    box-shadow:0 16px 30px -6px #000b, 0 0 0 1px #ffffff12 inset, 0 -3px 8px #0008 inset, 0 3px 6px #ffffff1f inset;
+  }
+  .knob.over .cap { box-shadow:0 0 0 2px var(--orange), 0 16px 30px -6px #000b; }
+  .voice.b .knob.over .cap { box-shadow:0 0 0 2px var(--cyan), 0 16px 30px -6px #000b; }
+  .note { font-size:clamp(24px,4.6vw,38px); letter-spacing:.04em; color:#f2f3ff; text-shadow:0 2px 0 #0008; }
+  .cents { margin-top:4px; font-size:11px; color:var(--dim); }
+  .hint { font-size:10px; letter-spacing:.14em; color:var(--dim); max-width:9em; margin:auto; }
+  .hz { margin-top:14px; font-size:20px; letter-spacing:.14em; color:#dfe0f4; }
+  .meta { color:var(--dim); font-size:10px; min-height:14px; margin-top:4px; letter-spacing:.08em; word-break:break-word; }
+  .peaks { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:10px 0; min-height:26px; }
+  .peaks button { padding:6px 11px; font-size:9px; }
+  .voice.a .peaks button.sel { color:var(--orange); box-shadow:0 0 10px #ff8a1f55, 0 0 0 1px #ff8a1f88; }
+  .voice.b .peaks button.sel { color:var(--cyan); box-shadow:0 0 10px #4fe3f055, 0 0 0 1px #4fe3f088; }
+  canvas { width:100%; height:64px; display:block; border-radius:14px; background:#14162244; box-shadow:0 2px 6px #0008 inset, 0 1px 0 #ffffff12; }
+  .row { display:flex; gap:6px; justify-content:center; flex-wrap:nowrap; margin-top:12px; }
+  .row button, .row select { padding:10px 13px; font-size:10px; }
+
+  .center { text-align:center; padding-top:8px; display:flex; flex-direction:column; gap:16px; }
+  .verdict { font-size:15px; line-height:1.5; letter-spacing:.1em; color:#fff; min-height:46px; }
+  .verdict em { font-style:normal; color:var(--orange); }
+  .verdict .dn { color:var(--cyan); }
+  .shift { font-size:10px; letter-spacing:.2em; color:var(--dim); }
+  .ctl { text-align:left; }
+  .ctl .h { display:flex; justify-content:space-between; font-size:10px; letter-spacing:.2em; color:var(--dim); margin-bottom:8px; text-transform:uppercase; }
+  .ctl .h b { color:var(--ink); font-weight:400; }
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:6px; outline:none; margin:0;
+    background:linear-gradient(90deg,var(--orange) var(--a,50%), #14162299 var(--a,50%)); box-shadow:0 1px 0 #ffffff1a, 0 2px 4px #0008 inset; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:30px; border-radius:6px; cursor:grab;
+    background:linear-gradient(90deg,#55587a,#2c2f48 55%,#55587a); box-shadow:0 5px 8px #000a, 0 0 0 1px #0007, 0 1px 0 #ffffff33 inset; }
+  input[type=range]::-moz-range-thumb { width:16px; height:30px; border-radius:6px; border:0; background:#3d405f; box-shadow:0 5px 8px #000a; }
+  .tools { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  #status { min-height:14px; font-size:9px; letter-spacing:.2em; color:var(--dim); }
+  .sidehint { position:absolute; font-size:9px; letter-spacing:.3em; color:#ffffff40; top:50%; transform-origin:center; white-space:nowrap; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Drum Pitch Match</h1>
-  <div class="row">
-    <div class="card" id="cardA"><div class="label">A: reference (detect pitch)</div><div class="drop" data-slot="A">Drop sample A here, or click</div><div class="pitch" id="pA">-</div><div class="sub" id="sA"></div><div class="peaks" id="kA"></div><canvas id="cA"></canvas><div class="actions"><button class="ghost" id="playA" disabled>Play A</button><button class="ghost" id="earA" disabled>Check by ear</button><select id="octA" title="Play down this many octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div></div>
-    <div class="card" id="cardB"><div class="label">B: sample to retune</div><div class="drop" data-slot="B">Drop sample B here, or click</div><div class="pitch" id="pB">-</div><div class="sub" id="sB"></div><div class="peaks" id="kB"></div><canvas id="cB"></canvas><div class="actions"><button class="ghost" id="playB" disabled>Play B</button><button class="ghost" id="earB" disabled>Check by ear</button><select id="octB" title="Play down this many octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div></div>
-  </div>
-  <div class="card" style="margin-top:16px">
-    <div class="label">Match B to A</div>
-    <div class="big" id="distance"></div>
-    <div class="sub" id="shiftInfo">Load both samples</div>
-    <div class="controls">
-      <label>Mode<select id="mode"><option value="stretch">Time-preserving (Signalsmith)</option><option value="vari">Varispeed (pitch + length change)</option></select></label>
-      <label>Fine offset: <span id="fineV">0</span> cents<input type="range" id="fine" min="-100" max="100" value="0"></label>
-      <label>Keep original attack: <span id="atkV">0</span> ms<input type="range" id="atk" min="0" max="40" value="0"></label>
-      <label><input type="checkbox" id="fold"> Fold to nearest octave (shift at most ±6 st)</label>
+<main class="plugin">
+  <header>
+    <div class="logo">Drum Pitch Match<small>V0.1</small></div>
+    <div class="pills">
+      <select id="mode" title="Pitch shift mode">
+        <option value="stretch">Time-preserving</option>
+        <option value="vari">Varispeed</option>
+      </select>
+      <label class="toggle"><input type="checkbox" id="fold">Fold octave</label>
     </div>
-    <div class="actions"><button id="playM" disabled>Play matched B</button><button class="ghost" id="dl" disabled>Download WAV</button></div>
-    <div id="status"></div>
+  </header>
+
+  <div class="stage">
+    <section class="voice a">
+      <div class="tag">A &middot; REFERENCE</div>
+      <div class="knob drop" data-slot="A">
+        <svg viewBox="0 0 200 200" data-knob="A">
+          <circle class="ring" cx="100" cy="100" r="98"/>
+          <g class="ticks"></g>
+          <circle class="track" cx="100" cy="100" r="76" stroke-dasharray="358 600" transform="rotate(135 100 100)"/>
+          <circle class="arc" cx="100" cy="100" r="76" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
+          <g class="dot"><circle cx="100" cy="24" r="7" stroke-width="2"/><circle cx="100" cy="24" r="1.8" style="fill:#fff;stroke:none"/></g>
+        </svg>
+        <div class="cap"><div class="note" id="pA">DROP</div><div class="cents" id="cenA">sample A</div></div>
+      </div>
+      <div class="hz" id="hzA">- Hz</div>
+      <div class="meta" id="sA"></div>
+      <div class="peaks" id="kA"></div>
+      <canvas id="cA"></canvas>
+      <div class="row">
+        <button id="playA" disabled>Play</button>
+        <button id="earA" disabled>Check by ear</button>
+        <select id="octA" title="Play down octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select>
+      </div>
+    </section>
+
+    <section class="center">
+      <div>
+        <div class="tag">B RELATIVE TO A</div>
+        <div class="verdict" id="distance">Load both samples</div>
+        <div class="shift" id="shiftInfo"></div>
+      </div>
+      <div class="ctl"><div class="h">Fine offset <b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
+      <div class="ctl"><div class="h">Keep original attack <b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
+      <div class="tools">
+        <button id="playM" class="hot" disabled>Play matched</button>
+        <button id="dl" disabled>Download WAV</button>
+      </div>
+      <div id="status"></div>
+    </section>
+
+    <section class="voice b">
+      <div class="tag">B &middot; TO RETUNE</div>
+      <div class="knob drop" data-slot="B">
+        <svg viewBox="0 0 200 200" data-knob="B">
+          <circle class="ring" cx="100" cy="100" r="98"/>
+          <g class="ticks"></g>
+          <circle class="track" cx="100" cy="100" r="76" stroke-dasharray="358 600" transform="rotate(135 100 100)"/>
+          <circle class="arc" cx="100" cy="100" r="76" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
+          <g class="dot"><circle cx="100" cy="24" r="7" stroke-width="2"/><circle cx="100" cy="24" r="1.8" style="fill:#fff;stroke:none"/></g>
+        </svg>
+        <div class="cap"><div class="note" id="pB">DROP</div><div class="cents" id="cenB">sample B</div></div>
+      </div>
+      <div class="hz" id="hzB">- Hz</div>
+      <div class="meta" id="sB"></div>
+      <div class="peaks" id="kB"></div>
+      <canvas id="cB"></canvas>
+      <div class="row">
+        <button id="playB" disabled>Play</button>
+        <button id="earB" disabled>Check by ear</button>
+        <select id="octB" title="Play down octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select>
+      </div>
+    </section>
   </div>
   <input type="file" id="file" accept="audio/*" hidden>
 </main>

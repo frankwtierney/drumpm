@@ -64,6 +64,19 @@ function sizeCanvas(cv) {
   return { g: cv.getContext('2d'), w, h, dpr };
 }
 
+// Min/max envelope of x across the canvas width. `total` is the sample count the full width represents.
+function strokeWave(g, w, h, dpr, x, total, peak, color, alpha = 1) {
+  const step = Math.max(1, Math.floor(total / w)), mid = h / 2, n = x.length;
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = 1 * dpr; g.beginPath();
+  for (let px = 0; px < w; px++) {
+    let mn = 0, mx = 0; const i0 = Math.floor((px / w) * total);
+    for (let i = i0; i < Math.min(n, i0 + step); i++) { if (x[i] < mn) mn = x[i]; if (x[i] > mx) mx = x[i]; }
+    g.moveTo(px + .5, mid - (mx / peak) * mid * 0.86); g.lineTo(px + .5, mid - (mn / peak) * mid * 0.86 + 1);
+  }
+  g.stroke(); g.restore();
+}
+const peakOf = (x) => { let p = 1e-9; for (let i = 0; i < x.length; i++) p = Math.max(p, Math.abs(x[i])); return p; };
+
 function drawWave(slot) {
   const s = state[slot]; if (!s) return;
   const { g, w, h, dpr } = sizeCanvas($('w' + slot)), x = toMono(s.channels), n = x.length, color = slot === 'A' ? '#ff8a1f' : '#4fe3f0';
@@ -71,17 +84,23 @@ function drawWave(slot) {
   // analysis window (where the pitch is read from)
   const on = findOnset(x, 0.1), a0 = on + 0.025 * s.sr, a1 = on + 0.175 * s.sr;
   g.fillStyle = color + '22'; g.fillRect((a0 / n) * w, 0, ((a1 - a0) / n) * w, h);
-  g.strokeStyle = color; g.lineWidth = 1 * dpr;
-  let peak = 0; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(x[i]));
-  const step = Math.max(1, Math.floor(n / w)), mid = h / 2;
-  g.beginPath();
-  for (let px = 0; px < w; px++) {
-    let mn = 0, mx = 0; const i0 = Math.floor((px / w) * n);
-    for (let i = i0; i < Math.min(n, i0 + step); i++) { if (x[i] < mn) mn = x[i]; if (x[i] > mx) mx = x[i]; }
-    g.moveTo(px + .5, mid - (mx / peak) * mid * 0.86); g.lineTo(px + .5, mid - (mn / peak) * mid * 0.86 + 1);
-  }
-  g.stroke();
-  g.strokeStyle = '#ffffff30'; g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
+  strokeWave(g, w, h, dpr, x, n, peakOf(x), color);
+  g.strokeStyle = '#ffffff30'; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+}
+
+// The matched result, drawn over a faint ghost of the original B so you can see what changed.
+function drawMatched() {
+  const m = state.matched, B = state.B, cv = $('wM');
+  const { g, w, h, dpr } = sizeCanvas(cv); g.clearRect(0, 0, w, h);
+  if (!m || !B) return;
+  const o = toMono(m.channels), b = toMono(B.channels), total = Math.max(o.length, b.length), peak = Math.max(peakOf(o), peakOf(b));
+  strokeWave(g, w, h, dpr, b, total, peak, '#4fe3f0', 0.28);
+  strokeWave(g, w, h, dpr, o, total, peak, '#c9ccff', 1);
+  g.strokeStyle = '#ffffff30'; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+}
+function setExport(on) {
+  const el = $('dragOut'); el.classList.toggle('has', on); el.classList.toggle('ready', on); el.setAttribute('aria-disabled', String(!on));
+  if (!on) drawMatched();
 }
 
 /* ---------- RTA-style spectrum (log axis, bars, peak hold) ---------- */
@@ -282,7 +301,7 @@ async function update(delay = 0) {
   if (!ready) {
     $('shiftBig').textContent = '\u2013'; setMatch(null); setTuner(null); $('tnNote').textContent = '';
     $('distance').innerHTML = `<span class="hint">${!A && !B ? 'Drop a reference (1) and a sample to retune (2)' : !A ? 'Now drop the reference sample (1)' : 'Now drop the sample to retune (2)'}</span>`;
-    $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = true; return;
+    $('playM').disabled = $('cmp').disabled = true; setExport(false); return;
   }
   const base = shiftAmount0(), st = totalShift();
   const dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
@@ -320,8 +339,8 @@ async function renderAudio() {
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
   const m = detectPitch(out, B.sr);
   $('tnNote').textContent = (wantAtk && !canAtk ? 'Match attack is on, but neither sample has a pitch sweep. ' : '') + (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '');
-  $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = false;
-  $('dragOut').classList.add('ready');
+  $('playM').disabled = $('cmp').disabled = false;
+  setExport(true); $('sM').textContent = state.matched.name; drawMatched();
   $('status').classList.remove('busy');
   window.__renderDone = (window.__renderDone || 0) + 1;
 }
@@ -374,7 +393,7 @@ $('earB').onclick = () => earCheck('B');
 
 /* ---------- export ---------- */
 $('dragOut').onclick = async () => {
-  const m = state.matched; if (!m) return;
+  const m = state.matched; if (!m || $('dragOut').getAttribute('aria-disabled') === 'true') return;
   // Inside the Artifact viewer, direct downloads are blocked: use its downloads capability (it accepts .zip, not .wav).
   try {
     const dl = window.claude?.use ? await window.claude.use('downloads') : null;
@@ -382,8 +401,9 @@ $('dragOut').onclick = async () => {
   } catch (e) { if (e?.code === 'declined') return; console.warn(e); }
   const a = document.createElement('a'); a.href = m.url; a.download = m.name; a.click();
 };
+$('dragOut').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('dragOut').click(); } };
 $('dragOut').addEventListener('dragstart', (e) => {
-  if (!state.matched) return e.preventDefault();
+  if (!state.matched || $('dragOut').getAttribute('aria-disabled') === 'true') return e.preventDefault();
   e.dataTransfer.effectAllowed = 'copy';
   e.dataTransfer.setData('DownloadURL', `audio/wav:${state.matched.name}:${state.matched.url}`); // Chromium: drops as a file
   e.dataTransfer.setData('text/uri-list', state.matched.url);
@@ -417,6 +437,26 @@ document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('clic
 $('matchAtk').addEventListener('change', () => { $('atkL').classList.toggle('on', $('matchAtk').checked); $('atk').disabled = $('matchAtk').checked; $('atk').title = $('matchAtk').checked ? 'Replaced by Match attack' : ''; update(); });
 $('fold').addEventListener('change', () => { $('foldL').classList.toggle('on', $('fold').checked); manual = null; update(); });
 ['fine', 'atk'].forEach((id) => $(id).addEventListener('input', () => update(150)));
-window.addEventListener('resize', () => ['A', 'B'].forEach((s) => { if (state[s]) { drawWave(s); drawSpectrum(s); } }));
+window.addEventListener('resize', () => { ['A', 'B'].forEach((s) => { if (state[s]) { drawWave(s); drawSpectrum(s); } }); drawMatched(); });
 styleRanges();
 window.__state = state; // for tests
+
+/* ---------- scroll wheel: hover a dial or slider and scroll ---------- */
+// Wheel up raises the value. One notch = one step; Shift = bigger steps, Alt = finer. Trackpads accumulate small deltas.
+function onWheel(el, apply) {
+  let acc = 0;
+  el.addEventListener('wheel', (e) => {
+    const steps = (() => { acc += e.deltaMode === 1 ? e.deltaY * 100 : e.deltaY; const n = Math.trunc(acc / 100); acc -= n * 100; return -n; })();
+    if (!apply) return;
+    e.preventDefault();
+    if (steps) apply(steps, e);
+  }, { passive: false });
+}
+onWheel($('mknob'), (n, e) => { if (state.A?.hz && state.B?.hz) setManual(Math.round(Math.max(-12, Math.min(12, (manual ?? shiftAmount0()) + n * (e.shiftKey ? 1 : e.altKey ? 0.01 : 0.1))) * 100) / 100); });
+for (const [id, step, big] of [['fine', 1, 10], ['atk', 1, 5]]) {
+  onWheel($(id), (n, e) => {
+    const el = $(id); if (el.disabled) return;
+    el.value = String(Math.max(Number(el.min), Math.min(Number(el.max), Number(el.value) + n * (e.shiftKey ? big : step))));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}

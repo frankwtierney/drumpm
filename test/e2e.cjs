@@ -44,6 +44,15 @@ const path = require('node:path');
   const off = await page.evaluate(() => ({ s: document.getElementById('tuner').dataset.s, read: document.getElementById('tnRead').textContent, big: document.getElementById('shiftBig').textContent }));
   console.log('tuner auto:', tuned, '| after drag:', JSON.stringify(off));
   await page.click('#autoBtn'); await page.waitForTimeout(400);
+  // scroll wheel: hovering the dial and the fine slider should change them
+  await page.hover('#mknob'); const before = await page.evaluate(() => document.getElementById('shiftBig').textContent);
+  await page.mouse.wheel(0, -100); await page.waitForTimeout(250);
+  const after = await page.evaluate(() => document.getElementById('shiftBig').textContent);
+  await page.hover('#fine'); await page.mouse.wheel(0, -100); await page.mouse.wheel(0, -100); await page.waitForTimeout(250);
+  const fine = await page.evaluate(() => document.getElementById('fine').value);
+  console.log('wheel dial:', before, '->', after, '| fine slider:', fine);
+  if (before === after || fine === '0') { console.log('FAIL wheel'); process.exit(1); }
+  await page.click('#autoBtn'); await page.evaluate(() => { const f = document.getElementById('fine'); f.value = 0; f.dispatchEvent(new Event('input', { bubbles: true })); }); await page.waitForTimeout(500);
   const back = await page.evaluate(() => document.getElementById('tuner').dataset.s);
   console.log('tuner after auto:', back);
   if (tuned !== 'tuned' || off.s === 'tuned' || back !== 'tuned') { console.log('FAIL tuner'); process.exit(1); }

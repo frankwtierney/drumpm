@@ -102,12 +102,9 @@
   /* match column */
   .match { display:flex; flex-direction:column; gap:14px; align-items:stretch; text-align:center; }
   .match .step { justify-content:flex-start; }
-  .mknob { position:relative; width:min(270px,80%); aspect-ratio:1; margin:0 auto; }
-  .mknob svg.k { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
   .mknob .arc { stroke:#c9ccff; }
   .mknob .dotg circle { stroke:#c9ccff; }
-  .mknob .cap { inset:21%; }
-  .big { font:400 clamp(24px,3vw,32px)/1 var(--display); color:#fff; }
+  .big { font:400 clamp(17px,1.9vw,21px)/1 var(--display); color:#fff; letter-spacing:.02em; }
   .unit { margin-top:6px; font:600 10px var(--font); letter-spacing:.2em; color:var(--dim); text-transform:uppercase; }
   .verdict { display:flex; justify-content:center; align-items:center; gap:10px; min-height:34px; font:600 15px var(--font); letter-spacing:.04em; }
   .verdict .ar { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; color:var(--cyan); box-shadow:0 0 0 1px currentColor, 0 0 14px #4fe3f055; }
@@ -164,6 +161,34 @@
   .vt button.on { color:#fff; background:#ffffff22; }
   .vt svg.i { width:15px; height:15px; }
   input[type=range]:disabled { opacity:.35; cursor:default; }
+
+  /* middle card mirrors the side cards */
+  .actions .play { color:var(--orange); box-shadow:0 0 18px #ff8a1f44, 0 6px 12px -5px #000b, 0 0 0 1px #ff8a1f88; } .actions .play:hover { color:#ffb066; }
+  .match { text-align:left; } .match .actions { align-items:center; }
+  .zone.out { cursor:grab; } .zone.out:active { cursor:grabbing; }
+  .zone.out[aria-disabled=true] { cursor:default; border-style:dashed; }
+  .zone.out.has { border-color:#c9ccff55; }
+  .zone.out:not(.has):hover { border-color:#ffffff30; }
+  .zone.out.has:hover, .zone.out:focus-visible { border-color:#c9ccff; }
+  .zone.out .empty svg.i { color:#c9ccff; }
+  .grab { position:absolute; right:8px; bottom:8px; display:none; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font:600 10px var(--font); letter-spacing:.1em; text-transform:uppercase; color:#e9eaff; background:#14162ccc; box-shadow:0 0 0 1px #c9ccff44; pointer-events:none; }
+  .grab svg.i { width:13px; height:13px; }
+  .zone.out.has .grab { display:inline-flex; }
+  .match .info { justify-content:center; }
+  .match .verdict { justify-content:flex-start; min-height:0; font-size:14px; align-items:flex-start; }
+  .match .verdict > span:last-child { display:block; line-height:1.3; }
+  #status { margin-left:auto; width:20px; height:6px; }
+  /* slimmer tuner */
+  .tuner { padding:7px 12px 6px; border-radius:12px; }
+  .tn-head { grid-template-columns:auto 1fr auto; gap:8px; font-size:15px; }
+  .tn-head span:nth-child(2) { justify-self:center; }
+  .tn-read { font-size:11px; min-width:0; }
+  .tn-read svg.i { width:13px; height:13px; }
+  .tn-bar { height:16px; margin-top:4px; }
+  .tn-ticks { inset:4px 0; } .tn-zone { top:1px; bottom:1px; }
+  .tn-needle::before { top:-4px; border-width:4px; border-top-width:5px; margin-left:-4px; }
+  .tn-note { margin-top:3px; min-height:0; font-size:10px; line-height:1.3; }
+  .tn-note:empty { display:none; }
 </style>
 </head>
 <body>
@@ -218,35 +243,38 @@
       </div>
     </section>
 
-    <!-- 3: match -->
+    <!-- 3: match (same structure as the two sample cards: box, dial + readout, controls) -->
     <section class="card m match">
-      <div class="step"><span class="n">3</span><b>Match</b> B to A<button class="mini on" id="autoBtn" hidden title="Auto uses the detected pitches. Drag the dial to set the shift by hand; click here to go back to auto."><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg><span id="autoT">Auto</span></button></div>
-      <div class="mknob" id="mknob" tabindex="0" title="Drag to set the shift by hand. Arrow keys nudge it. Double-click for auto.">
-        <svg class="k" viewBox="0 0 200 200"><circle class="ring" cx="100" cy="100" r="98"/><g class="ticks" id="mticks"></g>
-          <path class="track" id="mtrack" fill="none"/>
-          <path class="arc" id="marc" fill="none"/>
-          <g class="dotg" id="mdot"><circle cx="100" cy="24" r="6"/></g></svg>
-        <div class="cap"><div class="big" id="shiftBig">&ndash;</div><div class="unit">semitones</div></div>
+      <div class="step"><span class="n">3</span><b>Match</b> B to A<button class="mini on" id="autoBtn" hidden title="Auto uses the detected pitches. Drag, scroll or use the arrow keys on the dial to set the shift by hand; click here to go back to auto."><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg><span id="autoT">Auto</span></button></div>
+      <div class="zone out" id="dragOut" draggable="true" role="button" tabindex="0" aria-disabled="true" title="Drag the matched sample into your DAW or a folder, or click to save it as a WAV">
+        <canvas id="wM"></canvas>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg><b>Matched sample</b><span>appears here once A and B are loaded</span></div>
+        <div class="fn" id="sM"></div>
+        <div class="grab"><svg class="i" viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01"/></svg>Drag out &middot; click to save</div>
       </div>
-      <div class="verdict" id="distance"><span class="hint">Load both samples to match them</span></div>
-      
+      <div class="read">
+        <div class="knob mknob" id="mknob" tabindex="0" title="Drag, scroll, or use the arrow keys to set the shift by hand. Shift = bigger steps, Alt = finer. Double-click for auto.">
+          <svg class="k" viewBox="0 0 200 200"><circle class="ring" cx="100" cy="100" r="98"/><g class="ticks" id="mticks"></g>
+            <path class="track" id="mtrack" fill="none"/>
+            <path class="arc" id="marc" fill="none"/>
+            <g class="dotg" id="mdot"><circle cx="100" cy="24" r="6"/></g></svg>
+          <div class="cap"><div class="big" id="shiftBig">&ndash;</div><div class="cents">semitones</div></div>
+        </div>
+        <div class="info">
+          <div class="verdict" id="distance"><span class="hint">Load both samples to match them</span></div>
+        </div>
+      </div>
       <div class="tuner" id="tuner" data-s="none" title="How far B, after shifting, is from A's pitch">
-        <div class="tn-head"><span>&flat; flat</span><span class="tn-read" id="tnRead">&ndash;</span><span>sharp &sharp;</span></div>
+        <div class="tn-head"><span>&flat;</span><span class="tn-read" id="tnRead">&ndash;</span><span>&sharp;</span></div>
         <div class="tn-bar"><div class="tn-ticks"></div><div class="tn-zone"></div><div class="tn-needle" id="tnNeedle"></div></div>
-        <div class="tn-scale"><span>&minus;50&cent;</span><span>0</span><span>+50&cent;</span></div>
         <div class="tn-note" id="tnNote"></div>
       </div>
-      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg>Fine tune</span><b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
-      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Keep original attack</span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
-      <div class="go">
+      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg>Fine tune</span><b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
+      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Keep original attack</span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
+      <div class="actions">
         <button class="play fill" id="playM" disabled><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play matched</button>
         <button id="cmp" disabled title="Plays A, then your matched B"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4"/></svg>A / B</button>
-      </div>
-      <div id="status"></div>
-      <div class="step" style="margin-top:2px"><span class="n" style="background:#c9ccff">4</span><b>Export</b></div>
-      <div class="go" style="flex-direction:column;align-items:stretch">
-        <button class="drag" id="dragOut" draggable="true" disabled title="Drag into your DAW or a folder, or click to save as a WAV">
-          <svg class="i" viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01"/></svg><span id="dragT">Drag out &middot; click to save</span></button>
+        <span id="status"></span>
       </div>
     </section>
 

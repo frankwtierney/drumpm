@@ -1,7 +1,8 @@
 import { detectPitch, matchSemitones, describeHz, midiToHz, spectrum, toMono, findOnset } from '../src/detect.js';
 import { analyzeAttack, applyAttackContour } from '../src/attack.js';
-import { SCALES, ROOTS, ROLES, suggestTunings, guessRole, chordCoverage } from '../src/key.js';
-import { parseProgression } from '../src/chords.js';
+import { SCALES, ROOTS, ROLES, suggestTunings, guessRole, chordCoverage, parentSteps } from '../src/key.js';
+import { parseProgression, DEFAULT_PROG } from '../src/chords.js';
+import { createChordDialog, playChord, stopPads } from './chordui.js';
 import { createKeyboard, semitoneBands, KB_RANGE } from './keyboard.js';
 import { stretchShift, varispeed, keepTransient, encodeWav, zipStore } from './shift.js';
 
@@ -439,6 +440,7 @@ function loopTick() {
   }
 }
 function startLoop(kind) {
+  if (typeof pp !== 'undefined' && pp.on) stopProg();
   stopLoop(); ac.resume();
   loop.kind = kind; loop.next = ac.currentTime + 0.05; loop.step = 0; loop.timer = setInterval(loopTick, 25);
   loopTick(); syncPlayButtons();
@@ -541,18 +543,39 @@ for (const [id, step, big] of [['fine', 1, 10], ['atk', 1, 5]]) {
 }
 
 /* ---------- key + chords: which notes can B be tuned to? ---------- */
-const key = { roleTouched: false, hover: null, list: [], cfg: null, chords: [] };
-const PRESETS = ['I V vi IV', 'I vi IV V', 'I IV V', 'ii V I', 'vi IV I V', 'i VI III VII', 'i iv v', 'i \u266DVII \u266DVI V'];
+const key = { roleTouched: false, hover: null, list: [], cfg: null, chords: [], progIsDefault: false, progTouched: false };
+const MINORISH = ['minor', 'dorian', 'phrygian', 'minorPent'];
+const PRESETS = {
+  major: [['Pop', 'I V vi IV'], ['Sensitive pop', 'vi IV I V'], ['50s', 'I vi IV V'], ['Three chords', 'I IV V'], ['Rock', 'I IV V IV'], ['Jazz cadence', 'ii V I'], ['Rhythm changes', 'I vi ii V'], ['Ballad climb', 'I iii IV V'], ['Canon', 'I V vi iii IV I IV V']],
+  minor: [['Epic', 'i VI III VII'], ['Minor blues', 'i iv v'], ['Dark loop', 'i VII VI VII'], ['Andalusian', 'i VII VI V'], ['Moody', 'i iv VII III'], ['Jazz minor', 'ii\u00B0 V i']],
+};
+// The progression lives in the text box as a list of tokens (names or numerals). Cards, drag, and the picker all edit that list.
+const keyParam = () => { const root = $('keyRoot').value, scale = $('keyScale').value; return { rootPc: root === '' ? null : Number(root), scale, steps: parentSteps(scale) }; };
+const progTokens = () => $('prog').value.split(/[\s,|>\u2192-]+/).filter(Boolean);
+function setProg(tokens) { $('prog').value = tokens.join(' '); key.progIsDefault = false; key.progTouched = true; renderKey(); }
+// Picking a key fills in a starting progression, unless you have already written or changed one.
+function maybeDefaultProg() {
+  const k = keyParam(); if (k.rootPc == null) return;
+  if (key.progIsDefault || (!key.progTouched && !$('prog').value.trim())) { $('prog').value = DEFAULT_PROG[k.scale]; key.progIsDefault = true; }
+}
+function buildPresets() {
+  const k = keyParam(), list = MINORISH.includes(k.scale) ? PRESETS.minor : PRESETS.major;
+  $('progPreset').innerHTML = '<option value="">Choose\u2026</option>' + list.map(([label, nums]) => {
+    const names = k.rootPc == null ? '' : parseProgression(nums, k).chords.map((c) => c.symbol).join(' ');
+    return `<option value="${nums}">${label}: ${names || nums}${names ? `  (${nums})` : ''}</option>`;
+  }).join('');
+}
 (() => {
   $('keyRoot').innerHTML = '<option value="">Choose\u2026</option>' + ROOTS.map((r, i) => `<option value="${i}">${r}</option>`).join('');
   $('keyScale').innerHTML = Object.entries(SCALES).map(([k, v]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${v.label}</option>`).join('');
   $('keyRole').innerHTML = Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === 'snare' ? ' selected' : ''}>${v.label}</option>`).join('');
-  $('progPreset').innerHTML = '<option value="">Choose\u2026</option>' + PRESETS.map((p2) => `<option>${p2}</option>`).join('');
   $('keyRole').addEventListener('change', () => { key.roleTouched = true; });
-  for (const id of ['keyRoot', 'keyScale', 'keyRole']) $(id).addEventListener('change', () => renderKey());
-  $('prog').addEventListener('input', () => { clearTimeout(key.t); key.t = setTimeout(renderKey, 180); });
-  $('progPreset').addEventListener('change', () => { if ($('progPreset').value) { $('prog').value = $('progPreset').value; $('progPreset').value = ''; renderKey(); } });
+  for (const id of ['keyRoot', 'keyScale']) $(id).addEventListener('change', () => { maybeDefaultProg(); buildPresets(); renderKey(); });
+  $('keyRole').addEventListener('change', () => renderKey());
+  $('prog').addEventListener('input', () => { key.progIsDefault = false; key.progTouched = true; clearTimeout(key.t); key.t = setTimeout(renderKey, 180); });
+  $('progPreset').addEventListener('change', () => { if ($('progPreset').value) { $('prog').value = $('progPreset').value; key.progIsDefault = false; key.progTouched = true; $('progPreset').value = ''; renderKey(); } });
   $('ktX').onclick = () => { state.target = null; manual = null; update(); renderKey(); };
+  buildPresets();
 })();
 
 const midiOfHz = (hz) => Math.round(69 + 12 * Math.log2(hz / 440));
@@ -583,16 +606,13 @@ const INTERVALS = ['root', '\u266D2nd', '2nd', '\u266D3rd', '3rd', '4th', '\u266
 function renderKey() {
   const B = state.B, root = $('keyRoot').value, tgt = state.target;
   const cfg = key.cfg = { rootPc: root === '' ? null : Number(root), scale: $('keyScale').value, role: $('keyRole').value };
-  const steps = SCALES[cfg.scale].steps, { chords, errors } = parseProgression($('prog').value, { rootPc: cfg.rootPc, steps });
+  const steps = SCALES[cfg.scale].steps, kpar = keyParam(), cards = [], errors = [];
+  progTokens().forEach((tok, i) => { const r = parseProgression(tok, kpar); if (r.chords[0]) cards.push({ i, chord: r.chords[0] }); else errors.push(r.errors[0] ?? tok); });
+  const chords = cards.map((c) => c.chord);
   key.chords = chords;
   $('progErr').hidden = !errors.length; if (errors.length) $('progErr').textContent = `Couldn\u2019t read: ${errors.join(', ')}`;
-  const strip = $('chordStrip'); strip.textContent = '';
-  chords.forEach((c) => {
-    const el = document.createElement('div'); el.className = 'chord'; el.innerHTML = `<b>${c.symbol.split('/')[0]}</b><i>${c.numeral || ''}</i>`;
-    el.title = `${c.symbol}: ${c.tones.map((t) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][t]).join(' ')}. Hover to see its notes on the keyboard.`;
-    el.onmouseenter = () => kb.set({ hoverTones: new Set(c.tones) }); el.onmouseleave = () => kb.set({ hoverTones: null });
-    strip.appendChild(el);
-  });
+  renderChordCards(cards, cfg.rootPc != null || chords.length > 0);
+  $('progPlay').hidden = !chords.length; if (!chords.length && pp.on) stopProg();
   const keyName = cfg.rootPc == null ? '' : `${ROOTS[cfg.rootPc].split('/')[0]} ${SCALES[cfg.scale].label.toLowerCase()}`;
   $('keyStat').textContent = tgt ? `Target ${tgt.name}` : [keyName, chords.length ? `${chords.length} chords` : '', cfg.rootPc != null || chords.length ? ROLES[cfg.role].label : ''].filter(Boolean).join(' \u00b7 ') || 'Off';
   $('keyTarget').hidden = !tgt;
@@ -611,6 +631,60 @@ function renderKey() {
   showKbInfo();
   $('keyNote').textContent = !B?.hz ? 'Drop sample B to see which notes it can be tuned to.' : cfg.rootPc == null && !chords.length ? 'Pick a key, type a chord progression, or both. The keys light up for notes that fit.' : `Typical ${r.label.toLowerCase()} range ${r.sweet[0]}\u2013${r.sweet[1]} Hz (darker keys are out of range). Treat these as suggestions and check by ear with Loop.`;
 }
+
+const NOTE_PC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function renderChordCards(cards, showAdd) {
+  const strip = $('chordStrip'); strip.textContent = '';
+  cards.forEach(({ i, chord }) => {
+    const el = document.createElement('div'); el.className = 'chord'; el.draggable = true;
+    el.innerHTML = `<b>${chord.symbol.split('/')[0]}</b><i>${chord.numeral || ''}</i><button class="x" title="Remove this chord"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+    el.title = `${chord.symbol}: ${chord.tones.map((t) => NOTE_PC[t]).join(' ')}. Click to change it, drag to move it.`;
+    el.onmouseenter = () => kb.set({ hoverTones: new Set(chord.tones) }); el.onmouseleave = () => kb.set({ hoverTones: null });
+    el.querySelector('.x').onclick = (e) => { e.stopPropagation(); const t = progTokens(); t.splice(i, 1); setProg(t); };
+    el.onclick = () => chordDlg.open({ index: i, chord });
+    el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move'; el.classList.add('dragging'); });
+    el.addEventListener('dragend', () => { el.classList.remove('dragging'); strip.querySelectorAll('.over').forEach((x) => x.classList.remove('over')); });
+    el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.add('over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault(); const from = Number(e.dataTransfer.getData('text/plain'));
+      if (Number.isNaN(from) || from === i) return;
+      const t = progTokens(), [m] = t.splice(from, 1); t.splice(i, 0, m); setProg(t);
+    });
+    strip.appendChild(el);
+  });
+  if (showAdd) { const add = document.createElement('button'); add.className = 'chord add'; add.textContent = '+'; add.title = 'Add a chord'; add.onclick = () => chordDlg.open({ index: null, chord: null }); strip.appendChild(add); }
+}
+
+const chordDlg = createChordDialog({
+  ac, getKey: () => { const k = keyParam(); return { rootPc: k.rootPc, steps: k.steps, scale: k.scale }; },
+  onApply: (token, st) => { const t = progTokens(); if (st.index == null || st.index >= t.length) { t.push(token); st.index = t.length - 1; } else t[st.index] = token; setProg(t); },
+  onRemove: (st) => { if (st.index == null) return; const t = progTokens(); t.splice(st.index, 1); setProg(t); },
+});
+
+// Hear the progression: soft chord pads, with the matched sample hitting twice per chord.
+const BAR = 1.6, pp = { on: false, i: 0, next: 0, timer: 0 };
+function syncProgBtn() { $('progPlay').classList.toggle('on', pp.on); $('progPlay').innerHTML = pp.on ? `${STOP_ICON}<span>Stop</span>` : `${PLAY_ICON}<span>Hear it with the chords</span>`; }
+function progTick() {
+  while (pp.on && pp.next < ac.currentTime + 0.15) {
+    const n = key.chords.length, idx = pp.i % n, when = pp.next - ac.currentTime, M = state.matched;
+    playChord(ac, key.chords[idx], when, BAR * 0.98);
+    if (M) { play(M.channels, M.sr, when, 'B', 'matched'); play(M.channels, M.sr, when + BAR / 2, 'B', 'matched'); }
+    setTimeout(() => { document.querySelectorAll('#chordStrip .chord').forEach((el) => el.classList.remove('now')); document.querySelectorAll('#chordStrip .chord:not(.add)')[idx]?.classList.add('now'); }, Math.max(0, when * 1000));
+    pp.next += BAR; pp.i++;
+  }
+}
+function startProg() {
+  if (!key.chords.length) return;
+  stopLoop(true); stopProg(); ac.resume();
+  pp.on = true; pp.i = 0; pp.next = ac.currentTime + 0.1; pp.timer = setInterval(progTick, 25); progTick(); syncProgBtn();
+}
+function stopProg() {
+  if (!pp.on && !pp.timer) return;
+  clearInterval(pp.timer); pp.on = false; pp.timer = 0; stopPads(ac); stopLoop(true);
+  document.querySelectorAll('#chordStrip .chord').forEach((el) => el.classList.remove('now')); syncProgBtn();
+}
+$('progPlay').onclick = () => (pp.on ? stopProg() : startProg());
 
 function showKbInfo() {
   const el = $('kbInfo'), tgt = state.target;

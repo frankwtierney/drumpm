@@ -267,6 +267,36 @@
   .lg.k { background:#b9bdf8; } .lg.g { background:#34d58a; } .lg.r { background:#6ff2a8; color:#0e1a14; border-radius:50%; width:14px; height:14px; } .lg.t { box-shadow:0 0 0 2px #c9ccff; background:#dfe1f0; }
   .kbinfo { margin-top:10px; font-size:13px; color:var(--ink); min-height:20px; }
   .kbinfo b { color:#fff; font-weight:600; } .kbinfo .mut { color:var(--dim); }
+
+  .hintl { text-transform:none; letter-spacing:.02em; font-weight:400; color:#8d90ab99; font-size:10px; }
+  .chordbar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .chordbar .chordstrip { margin-top:0; }
+  #progPlay { margin-left:auto; }
+  #progPlay.on { color:var(--cyan); box-shadow:0 0 14px #4fe3f044, 0 6px 12px -5px #000b, 0 0 0 1px #4fe3f088; }
+  .chord { position:relative; cursor:grab; transition:box-shadow .15s, background .15s, transform .1s; } .chord:active { cursor:grabbing; }
+  .chord .x { position:absolute; top:-7px; right:-7px; width:20px; height:20px; padding:0; border-radius:50%; display:none; place-items:center; background:#2b2f47; box-shadow:0 0 0 1px #ffffff33; }
+  .chord:hover .x { display:grid; } .chord .x svg.i { width:11px; height:11px; }
+  .chord.add { min-width:54px; border:0; justify-content:center; color:var(--dim); box-shadow:0 0 0 1px #ffffff33; background:none; text-transform:none; font-size:20px; cursor:pointer; }
+  .chord.add:hover { color:#fff; box-shadow:0 0 0 1px #c9ccffaa; }
+  .chord.dragging { opacity:.4; } .chord.over { box-shadow:0 0 0 2px #c9ccff; transform:translateY(-2px); }
+  .chord.now { background:#4fe3f01f; box-shadow:0 0 0 1px #4fe3f0, 0 0 16px #4fe3f055; }
+  .chordDlg { border:0; padding:0; border-radius:22px; color:var(--ink); width:min(720px,94vw); background:linear-gradient(160deg,#2a2e47,#3a3d5c); box-shadow:0 40px 90px -20px #000e, 0 0 0 1px #ffffff1f inset; }
+  .chordDlg::backdrop { background:#0a0b14b3; backdrop-filter:blur(3px); }
+  .dhead { display:flex; justify-content:space-between; align-items:center; padding:18px 22px 6px; }
+  .dhead b { font:600 12px var(--font); letter-spacing:.18em; text-transform:uppercase; } .dsub { margin-left:14px; font:400 18px var(--display); color:#fff; }
+  .ib2 { padding:8px; border-radius:50%; } 
+  .dbody { display:flex; gap:26px; padding:10px 22px 22px; flex-wrap:wrap; align-items:center; justify-content:center; }
+  .cof { width:min(300px,100%); flex:none; } .cof .wedge { cursor:pointer; } .cof .wedge:hover path { stroke:#fff; }
+  .cof text { pointer-events:none; font-family:'Inter',sans-serif; font-weight:600; } .cof .lt { fill:#e9eaff; } .cof .dk { fill:#16182c; } .cofc { fill:#fff; font-family:'Michroma',sans-serif !important; } .cofs { fill:#9498b6; font-style:italic; }
+  .dside { flex:1 1 260px; display:grid; gap:12px; }
+  .dlabel { font:600 10px var(--font); letter-spacing:.16em; text-transform:uppercase; color:var(--dim); }
+  .pal { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .pbtn { flex-direction:column; gap:2px; padding:9px 4px; border-radius:12px; text-transform:none; letter-spacing:.02em; } .pbtn b { font:600 14px var(--font); color:#fff; } .pbtn i { font:italic 400 11px var(--font); color:var(--dim); }
+  .pbtn.on { box-shadow:0 0 12px #c9ccff44, 0 0 0 1px #c9ccff; }
+  .dext { justify-self:start; } .dext button { padding:7px 12px; text-transform:none; letter-spacing:.02em; font-size:12px; }
+  .dnotes { font:500 13px var(--font); letter-spacing:.12em; color:var(--ink); }
+  .dact { display:flex; gap:10px; flex-wrap:wrap; } .dact .done { margin-left:auto; color:var(--cyan); }
+  .mut { color:var(--dim); font-size:12px; }
 </style>
 </head>
 <body>
@@ -397,12 +427,12 @@
         <label>Key<select id="keyRoot" title="The song's key"></select></label>
         <label>Scale<select id="keyScale"></select></label>
         <label>Tune B as<select id="keyRole" title="Sets the range and which notes suit the drum. Chosen from B's pitch when it loads."></select></label>
-        <label class="grow">Chords<input id="prog" type="text" spellcheck="false" autocomplete="off" placeholder="Am F C G   or   i VI III VII" title="Chord names (Am F C G7 Dm7) or Roman numerals (i VI III VII). Numerals need a key."></label>
-        <label>Presets<select id="progPreset" title="Fill in a common progression as numerals"></select></label>
+        <label class="grow">Chords <span class="hintl">(drag to reorder, click to change)</span><input id="prog" type="text" spellcheck="false" autocomplete="off" placeholder="Am F C G   or   i VI III VII" title="Chord names (Am F C G7 Dm7) or Roman numerals (i VI III VII). Numerals need a key."></label>
+        <label>Progression<select id="progPreset" title="Pick a common progression. It fills in the chords for your key, and you can then change any of them."></select></label>
         <div class="ktarget" id="keyTarget" hidden><span id="ktT"></span><button id="ktX" title="Go back to matching sample A"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       </div>
       <div class="proErr" id="progErr" hidden></div>
-      <div class="chordstrip" id="chordStrip"></div>
+      <div class="chordbar"><div class="chordstrip" id="chordStrip"></div><button id="progPlay" hidden title="Plays the chords as soft pads, with your matched sample hitting on every chord, so you can hear the tuned drum against the harmony"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg><span>Hear it with the chords</span></button></div>
       <div class="keynote" id="keyNote">Pick a key, type a chord progression, or both. The keys light up for notes that fit.</div>
       <canvas id="kbd" role="img" aria-label="Piano keyboard. Lit keys fit the key and chords. Click a key to tune B to it."></canvas>
       <div class="kblegend"><span><i class="lg k"></i>in the key</span><span><i class="lg g"></i>chord tone (brighter = more chords)</span><span><i class="lg r">1</i>best fits</span><span><i class="lg t"></i>target</span><span class="dim">Click any key to tune B to it</span></div>
@@ -412,6 +442,21 @@
   <div class="tip">Tip: drop two files anywhere on the window at once. The first becomes A, the second B.</div>
   <input type="file" id="file" accept="audio/*" hidden>
 </main>
+
+<dialog id="chordDlg" class="chordDlg" aria-label="Choose a chord">
+  <div class="dhead"><div><b id="dlgTitle">Chord</b><span id="dlgSub" class="dsub"></span></div><button id="dlgClose" class="ib2" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dbody">
+    <svg id="cof" class="cof" viewBox="-130 -130 260 260" role="img" aria-label="Circle of fifths. Click a chord to use it."></svg>
+    <div class="dside">
+      <div class="dlabel">Chords in this key</div>
+      <div class="pal" id="dlgPal"></div>
+      <div class="dlabel">Colour</div>
+      <div class="seg dext" id="dlgExt"><button data-ext="triad">Triad</button><button data-ext="7th">7th</button><button data-ext="sus2">sus2</button><button data-ext="sus4">sus4</button><button data-ext="add9">add9</button></div>
+      <div class="dnotes" id="dlgNotes"></div>
+      <div class="dact"><button id="dlgHear"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Hear</button><button id="dlgRemove">Remove</button><button id="dlgDone" class="done">Done</button></div>
+    </div>
+  </div>
+</dialog>
 <script type="module" src="./app.js"></script>
 </body>
 </html>

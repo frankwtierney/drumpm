@@ -91,3 +91,6 @@ export function chordCoverage(chords) {
   for (const c of chords) for (const pc of c.tones) cov[pc]++;
   return cov;
 }
+
+/** Steps of the 7-note scale a key's chords are built on (pentatonic scales use their parent scale). */
+export const parentSteps = (scale) => (scale === 'majorPent' ? SCALES.major.steps : scale === 'minorPent' ? SCALES.minor.steps : SCALES[scale].steps);

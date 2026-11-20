@@ -14,7 +14,7 @@ const path = require('node:path');
   await page.selectOption('#keyRoot', '9'); await page.selectOption('#keyScale', 'minor');           // A minor
   await page.fill('#prog', 'i VI III VII'); await page.waitForTimeout(400);                          // numerals -> Am F C G
   const chords = await page.evaluate(() => window.__kb.chords());
-  const chips = await page.$$eval('.chord', (els) => els.map((e) => e.querySelector('b').textContent + ' ' + e.querySelector('i').textContent));
+  const chips = await page.$$eval('.chord:not(.add)', (els) => els.map((e) => e.querySelector('b').textContent + ' ' + e.querySelector('i').textContent));
   const list = await page.evaluate(() => window.__kb.list());
   // clicking the best-ranked key on the piano retunes B to it
   const top = list[0], n0 = await page.evaluate(() => window.__renderDone || 0);

@@ -47,3 +47,40 @@ test('a progression alone, with no key, still gives suggestions from chord tones
   const c = suggestTunings(200, { rootPc: null, role: 'snare', chords: parseProgression('Am F C G').chords });
   assert.ok(c.length > 0 && c.every((x) => x.fit.covered >= 1));
 });
+
+import { diatonicChords, chordSymbol, chordToken, describeChord, DEFAULT_PROG } from '../src/chords.js';
+import { parentSteps } from '../src/key.js';
+
+test('diatonic chords: C major and A minor', () => {
+  const c = diatonicChords(0, major);
+  assert.deepEqual(c.map((x) => x.name), ['C', 'Dm', 'Em', 'F', 'G', 'Am', 'Bdim']);
+  assert.deepEqual(c.map((x) => x.numeral), ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°']);
+  assert.deepEqual(c.map((x) => x.seventh), ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5']);
+  assert.deepEqual(diatonicChords(A, minor).map((x) => x.name), ['Am', 'Bdim', 'C', 'Dm', 'Em', 'F', 'G']);
+  assert.deepEqual(diatonicChords(5, major).map((x) => x.name).slice(0, 4), ['F', 'Gm', 'Am', 'Bb']);     // flat keys spell with flats
+  assert.deepEqual(diatonicChords(0, minor).map((x) => x.name), ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb']);   // C minor has three flats
+  assert.deepEqual(diatonicChords(0, major).map((x) => x.name)[1], 'Dm'); // C major stays natural
+});
+
+test('every default progression reads without errors in its scale', () => {
+  for (const [scale, text] of Object.entries(DEFAULT_PROG)) {
+    const r = parseProgression(text, { rootPc: A, steps: parentSteps(scale) });
+    assert.deepEqual(r.errors, [], scale); assert.ok(r.chords.length >= 2, scale);
+  }
+});
+
+test('chord symbols and tokens round-trip through the parser', () => {
+  const key = { rootPc: A, steps: minor };
+  assert.equal(chordSymbol(5, '', 'triad', { flats: false }), 'F'); assert.equal(chordSymbol(10, '', 'triad', { flats: true }), 'Bb');
+  assert.equal(chordSymbol(2, 'm', '7th', { diatonic: diatonicChords(A, minor)[3] }), 'Dm7');
+  assert.equal(chordSymbol(7, '', 'sus4'), 'Gsus4');
+  assert.equal(chordToken('F', key), 'VI');
+  assert.equal(chordToken('G7', key), 'VII7');
+  assert.equal(chordToken('Am', { rootPc: null }), 'Am');
+  for (const sym of ['Bb', 'F#m', 'Bm7b5', 'Dm7', 'Gsus4', 'Cadd9', 'Edim7', 'Gaug']) {
+    const tok = chordToken(sym, key), a = parseProgression(sym, key).chords[0], b = parseProgression(tok, key).chords[0];
+    assert.ok(b && a.rootPc === b.rootPc && JSON.stringify(Object.entries(a.roles).sort()) === JSON.stringify(Object.entries(b.roles).sort()), `${sym} -> ${tok}`);
+  }
+  assert.deepEqual(describeChord(parseProgression('Bm7b5').chords[0]), { rootPc: 11, quality: 'dim', ext: '7th' });
+  assert.deepEqual(describeChord(parseProgression('Am').chords[0]), { rootPc: 9, quality: 'm', ext: 'triad' });
+});

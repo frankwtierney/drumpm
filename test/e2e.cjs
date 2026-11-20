@@ -50,6 +50,12 @@ const path = require('node:path');
   const cents = 1200 * Math.log2(res.hzOut / res.hzA);
   console.log('output vs A error (cents):', cents.toFixed(1));
   await page.screenshot({ path: path.join(dir, 'screenshot.png'), fullPage: true });
+  // RTA: playing the matched sample should drive live bars
+  await page.click('#playM'); await page.waitForTimeout(160);
+  const live = await page.evaluate(() => ({ max: window.__rta.lastMax, ev: window.__rta.events.length }));
+  await page.screenshot({ path: path.join(dir, 'rta.png'), fullPage: true });
+  console.log('rta live:', JSON.stringify(live));
+  if (!(live.max > 0.05)) { console.log('FAIL rta'); await browser.close(); srv.kill(); process.exit(1); }
   await browser.close(); srv.kill();
   if (Math.abs(cents) > 40 || res.lenOut !== res.lenB || res.peak < 0.1) { console.log('FAIL'); process.exit(1); }
   console.log('PASS');

@@ -50,7 +50,8 @@ function render(slot) {
     k.appendChild(b);
   }
   setKnob(slot, d.hz);
-  drawSpectrum(slot);
+  s.rtaStatic = null;
+  ['A', 'B'].forEach((k) => state[k] && drawSpectrum(k));
   drawWave(slot);
   $('play' + slot).disabled = $('ear' + slot).disabled = false;
 }
@@ -80,22 +81,93 @@ function drawWave(slot) {
   g.strokeStyle = '#ffffff30'; g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
 }
 
-function drawSpectrum(slot) {
-  const s = state[slot]; if (!s) return;
-  const { g, w, h, dpr } = sizeCanvas($('c' + slot)), x = toMono(s.channels), on = findOnset(x, 0.1);
-  g.clearRect(0, 0, w, h);
-  const seg = x.subarray(on + Math.round(0.025 * s.sr), on + Math.round(0.175 * s.sr));
-  if (seg.length < 512) return;
-  const { mag, binHz } = spectrum(seg, s.sr, 4), fmax = 1000, bins = Math.floor(fmax / binHz);
-  let mx = 0; for (let i = 0; i < bins; i++) mx = Math.max(mx, mag[i]);
-  const color = slot === 'A' ? '#ff8a1f' : '#4fe3f0';
-  g.strokeStyle = color; g.lineWidth = 1.4 * dpr; g.beginPath();
-  for (let i = 0; i < bins; i++) {
-    const px = (i / bins) * w, py = h - 4 * dpr - Math.max(0, (20 * Math.log10(mag[i] / mx + 1e-6) + 60) / 60) * (h - 8 * dpr);
-    i ? g.lineTo(px, py) : g.moveTo(px, py);
+/* ---------- RTA-style spectrum (log axis, bars, peak hold) ---------- */
+const RTA = { N: 64, F0: 25, F1: 1200 };
+const edge = (i) => RTA.F0 * Math.pow(RTA.F1 / RTA.F0, i / RTA.N);
+const rtaX = (hz) => Math.log(hz / RTA.F0) / Math.log(RTA.F1 / RTA.F0);
+const rta = { events: [], raf: 0, shown: new Set(), peaks: { A: new Float32Array(RTA.N), B: new Float32Array(RTA.N) }, lastMax: 0 };
+window.__rta = rta;
+
+// dB per FFT bin -> N log-spaced bar heights in 0..1 (lo..hi dB maps to 0..1)
+function bands(db, binHz, lo, hi) {
+  const out = new Float32Array(RTA.N);
+  for (let i = 0; i < RTA.N; i++) {
+    const f0 = edge(i), f1 = edge(i + 1), b0 = Math.floor(f0 / binHz), b1 = Math.floor(f1 / binHz);
+    let v = -Infinity;
+    if (b1 > b0) for (let b = b0; b <= b1 && b < db.length; b++) v = Math.max(v, db[b]);
+    else { const p = Math.sqrt(f0 * f1) / binHz, k = Math.floor(p), fr = p - k; v = db[k] * (1 - fr) + db[k + 1] * fr; }
+    out[i] = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
   }
-  g.stroke();
-  if (s.hz && s.hz < fmax) { g.strokeStyle = '#ffffffaa'; g.setLineDash([3 * dpr, 4 * dpr]); const px = (s.hz / fmax) * w; g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke(); g.setLineDash([]); }
+  return out;
+}
+
+function staticBands(slot) { // spectrum of the analysis window, normalised to its own peak
+  const s = state[slot], x = toMono(s.channels), on = findOnset(x, 0.1);
+  const seg = x.subarray(on + Math.round(0.025 * s.sr), on + Math.round(0.175 * s.sr));
+  if (seg.length < 512) return new Float32Array(RTA.N);
+  const { mag, binHz } = spectrum(seg, s.sr, 4);
+  let mx = 0; for (let i = 0; i < mag.length; i++) mx = Math.max(mx, mag[i]);
+  const db = Float32Array.from(mag, (m) => 20 * Math.log10(m / mx + 1e-9));
+  return bands(db, binHz, -60, 0);
+}
+
+function drawSpectrum(slot, live = null, tag = '') {
+  const s = state[slot]; if (!s) return;
+  const { g, w, h, dpr } = sizeCanvas($('c' + slot)), N = RTA.N, bw = w / N, ph = h - 14 * dpr;
+  const color = slot === 'A' ? '#ff8a1f' : '#4fe3f0';
+  g.clearRect(0, 0, w, h);
+  g.font = `${9 * dpr}px Inter, sans-serif`; g.textAlign = 'center';
+  for (const hz of [50, 100, 200, 500, 1000]) { // grid + labels
+    const x = rtaX(hz) * w;
+    g.strokeStyle = '#ffffff12'; g.lineWidth = dpr; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, ph); g.stroke();
+    g.fillStyle = '#ffffff55'; g.fillText(hz >= 1000 ? '1k' : String(hz), x, h - 2 * dpr);
+  }
+  const bar = (vals, alpha, glow) => {
+    g.save(); g.fillStyle = color; g.globalAlpha = alpha; if (glow) { g.shadowColor = color; g.shadowBlur = 8 * dpr; }
+    for (let i = 0; i < N; i++) { const v = vals[i] * ph; if (v > 0.5) g.fillRect(i * bw + bw * 0.14, ph - v, bw * 0.72, v); }
+    g.restore();
+  };
+  s.rtaStatic = s.rtaStatic || staticBands(slot);
+  if (live) {
+    bar(s.rtaStatic, 0.16, false); bar(live, 0.95, true);
+    const pk = rta.peaks[slot]; g.fillStyle = '#ffffffcc';
+    for (let i = 0; i < N; i++) { pk[i] = Math.max(live[i], pk[i] - 0.012); if (pk[i] > 0.03) g.fillRect(i * bw + bw * 0.14, ph - pk[i] * ph - 2 * dpr, bw * 0.72, 1.5 * dpr); }
+  } else bar(s.rtaStatic, 0.6, false);
+  const line = (hz, c, label) => {
+    if (!hz || hz < RTA.F0 || hz > RTA.F1) return;
+    const x = rtaX(hz) * w; g.save(); g.strokeStyle = c; g.fillStyle = c; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 3 * dpr]);
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, ph); g.stroke(); g.setLineDash([]);
+    g.textAlign = x > w - 20 * dpr ? 'right' : 'left'; g.font = `600 ${10 * dpr}px Inter, sans-serif`; g.fillText(label, x + (g.textAlign === 'left' ? 4 : -4) * dpr, 11 * dpr); g.restore();
+  };
+  if (tag === 'matched') line(state.A?.hz, '#ff8a1f', 'A');          // matched B should land on A
+  else { line(s.hz, '#ffffffcc', slot); if (slot === 'B') line(state.A?.hz, '#ff8a1f', 'A'); }
+}
+
+let analyser = null, fftBuf = null;
+function getAnalyser() {
+  if (!analyser) { analyser = ac.createAnalyser(); analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.72; analyser.minDecibels = -100; analyser.maxDecibels = -5; analyser.connect(ac.destination); fftBuf = new Float32Array(analyser.frequencyBinCount); }
+  return analyser;
+}
+function rtaStart(slot, t0, dur, tag) {
+  rta.events.push({ slot, t0, t1: t0 + dur + 0.45, tag });
+  if (!rta.raf) rta.raf = requestAnimationFrame(rtaFrame);
+}
+function rtaFrame() {
+  rta.raf = 0;
+  const now = ac.currentTime;
+  rta.events = rta.events.filter((e) => e.t1 > now);
+  const act = [...rta.events].reverse().find((e) => now >= e.t0 && now <= e.t1);
+  const nowShown = new Set();
+  if (act) {
+    analyser.getFloatFrequencyData(fftBuf);
+    const live = bands(fftBuf, ac.sampleRate / analyser.fftSize, -80, -8);
+    rta.lastMax = Math.max(...live);
+    if (!rta.shown.has(act.slot)) rta.peaks[act.slot].fill(0);
+    drawSpectrum(act.slot, live, act.tag); nowShown.add(act.slot);
+  }
+  for (const sl of rta.shown) if (!nowShown.has(sl)) drawSpectrum(sl); // back to the static view
+  rta.shown = nowShown;
+  if (rta.events.length || nowShown.size) rta.raf = requestAnimationFrame(rtaFrame);
 }
 
 /* ---------- knobs ---------- */
@@ -216,26 +288,27 @@ async function renderAudio() {
 })();
 
 /* ---------- playback ---------- */
-function play(channels, sr, when = 0) {
+function play(channels, sr, when = 0, slot = null, tag = '') {
   ac.resume();
   const b = ac.createBuffer(channels.length, channels[0].length, sr);
   channels.forEach((c, i) => b.copyToChannel(c, i));
-  const src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(ac.currentTime + when);
+  const src = ac.createBufferSource(); src.buffer = b; src.connect(getAnalyser()); src.start(ac.currentTime + when);
+  if (slot) rtaStart(slot, ac.currentTime + when, b.duration, tag);
   return b.duration;
 }
 function earCheck(slot) {
   const s = state[slot], st = Number($('oct' + slot).value);
   if (!s?.hz) return;
-  play(st ? s.channels.map((c) => varispeed(c, st)) : s.channels, s.sr);
+  play(st ? s.channels.map((c) => varispeed(c, st)) : s.channels, s.sr, 0, slot);
   const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
   o.frequency.value = s.hz * Math.pow(2, st / 12);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1.6);
+  o.connect(g).connect(getAnalyser()); o.start(t); o.stop(t + 1.6);
 }
-$('playA').onclick = () => play(state.A.channels, state.A.sr);
-$('playB').onclick = () => play(state.B.channels, state.B.sr);
-$('playM').onclick = () => play(state.matched.channels, state.matched.sr);
-$('cmp').onclick = () => { const d = play(state.A.channels, state.A.sr); play(state.matched.channels, state.matched.sr, Math.min(d, 1.2) + 0.15); };
+$('playA').onclick = () => play(state.A.channels, state.A.sr, 0, 'A');
+$('playB').onclick = () => play(state.B.channels, state.B.sr, 0, 'B');
+$('playM').onclick = () => play(state.matched.channels, state.matched.sr, 0, 'B', 'matched');
+$('cmp').onclick = () => { const d = play(state.A.channels, state.A.sr, 0, 'A'); play(state.matched.channels, state.matched.sr, Math.min(d, 1.2) + 0.15, 'B', 'matched'); };
 $('earA').onclick = () => earCheck('A');
 $('earB').onclick = () => earCheck('B');
 

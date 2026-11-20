@@ -20,7 +20,7 @@ async function loadFile(slot, file) {
 function render(slot) {
   const s = state[slot], d = s.det;
   $('p' + slot).textContent = d.hz ? d.note : 'N/A';
-  $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents} cents` : 'no pitch';
+  $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents} CENTS` : 'no pitch';
   $('hz' + slot).textContent = d.hz ? `${d.hz.toFixed(1)} Hz` : '- Hz';
   $('s' + slot).textContent = d.hz ? `${s.name} / ${(d.confidence * 100).toFixed(0)}% confidence${d.confidence < 0.5 ? ' / low: try another peak' : ''}` : s.name;
   setKnob(slot, d.hz);
@@ -45,13 +45,13 @@ function drawSpectrum(cv, s, slot) {
   const { mag, binHz } = spectrum(seg, s.sr, 4), fmax = 1000, bins = Math.floor(fmax / binHz);
   let mx = 0; for (let i = 0; i < bins; i++) mx = Math.max(mx, mag[i]);
   const css = getComputedStyle(document.body);
-  g.strokeStyle = slot === 'A' ? '#ff8a1f' : '#4fe3f0'; g.lineWidth = 1.5 * dpr; g.beginPath();
+  g.strokeStyle = slot === 'A' ? '#f4f4f5' : '#7ef0cf'; g.lineWidth = 1 * dpr; g.beginPath();
   for (let i = 0; i < bins; i++) {
     const px = (i / bins) * w, py = h - Math.max(0, (20 * Math.log10(mag[i] / mx + 1e-6) + 60) / 60) * h;
     i ? g.lineTo(px, py) : g.moveTo(px, py);
   }
   g.stroke();
-  if (s.hz && s.hz < fmax) { g.strokeStyle = '#ffffffcc'; g.lineWidth = 1.5 * dpr; const px = (s.hz / fmax) * w; g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke(); }
+  if (s.hz && s.hz < fmax) { g.strokeStyle = '#ffffff66'; g.lineWidth = 1 * dpr; g.setLineDash([3 * dpr, 4 * dpr]); const px = (s.hz / fmax) * w; g.beginPath(); g.moveTo(px, 0); g.lineTo(px, h); g.stroke(); }
 }
 
 function shiftAmount0() {
@@ -68,12 +68,12 @@ let renderToken = 0;
 async function update() {
   $('fineV').textContent = $('fine').value; $('atkV').textContent = $('atk').value; styleRanges();
   const st = shiftAmount();
-  if (st === null) { $('distance').textContent = 'Load both samples'; $('shiftInfo').textContent = ''; $('playM').disabled = $('dl').disabled = true; return; }
+  if (st === null) { $('distance').textContent = 'Load both samples'; $('shiftInfo').textContent = ''; $('shiftBig').textContent = '\u2013'; $('playM').disabled = $('dl').disabled = true; return; }
   const base = shiftAmount0(), dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
   const [w2, c2] = cts === 100 ? [whole + 1, 0] : [whole, cts];
   $('distance').innerHTML = Math.abs(base) < 0.005 ? 'B is in tune with A'
-    : `B is <em>${w2} st ${c2} cents</em><br>${base < 0 ? 'above' : 'below'} A &middot; shift <span class="${base < 0 ? 'dn' : ''}">${base < 0 ? 'down' : 'up'}</span>`;
-  $('shiftInfo').textContent = `SHIFT B BY ${st >= 0 ? '+' : ''}${st.toFixed(2)} semitones`;
+    : `B is <em>${w2} semitones ${c2} cents</em><br>${base < 0 ? 'above' : 'below'} A &middot; shift <span class="${base < 0 ? 'dn' : 'up'}">${base < 0 ? 'down' : 'up'}</span>`;
+  $('shiftBig').textContent = (st >= 0 ? '+' : '\u2212') + Math.abs(st).toFixed(2); $('shiftInfo').textContent = 'applied to B';
   const token = ++renderToken, B = state.B;
   $('status').textContent = 'Rendering...';
   let out;
@@ -84,7 +84,7 @@ async function update() {
   if (token !== renderToken) return;
   state.matched = { channels: out, sr: B.sr };
   $('playM').disabled = $('dl').disabled = false;
-  $('status').textContent = `RENDERED ${(out[0].length / B.sr * 1000).toFixed(0)} MS`;
+  $('status').textContent = `rendered ${(out[0].length / B.sr * 1000).toFixed(0)} ms`;
   window.__renderDone = (window.__renderDone || 0) + 1;
 }
 
@@ -129,27 +129,33 @@ $('earA').onclick = () => earCheck('A');
 $('earB').onclick = () => earCheck('B');
 
 // ---- knob visuals ----
-const ARC = 358, FMIN = 30, FMAX = 800; // arc length in svg units for 270 degrees at r=76
+const ARC = 415, FMIN = 30, FMAX = 800; // arc length (270 deg at r=88)
 function frac(hz) { return Math.max(0, Math.min(1, Math.log(hz / FMIN) / Math.log(FMAX / FMIN))); }
 function setKnob(slot, hz) {
   const svg = document.querySelector(`[data-knob=${slot}]`), f = hz ? frac(hz) : 0;
   svg.querySelector('.arc').setAttribute('stroke-dasharray', `${f * ARC} 600`);
   svg.querySelector('.dot').style.transform = `rotate(${-135 + 270 * f}deg)`;
+  updateStrip();
 }
-document.querySelectorAll('.ticks').forEach((g) => {
-  for (let i = 0; i <= 54; i++) {
-    const a = ((135 + (270 * i) / 54) * Math.PI) / 180, major = i % 9 === 0, r1 = 90, r2 = major ? 84 : 87;
-    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    l.setAttribute('class', 'tick'); l.setAttribute('x1', 100 + r1 * Math.cos(a)); l.setAttribute('y1', 100 + r1 * Math.sin(a));
-    l.setAttribute('x2', 100 + r2 * Math.cos(a)); l.setAttribute('y2', 100 + r2 * Math.sin(a)); g.appendChild(l);
+// Horizontal pitch strip: where A and B sit on the same log scale.
+(function buildTicks() {
+  const g = $('stripTicks'), ns = 'http://www.w3.org/2000/svg';
+  for (const hz of [32, 64, 128, 256, 512]) {
+    const x = frac(hz) * 960 + 20;
+    const l = document.createElementNS(ns, 'line'); l.setAttribute('class', 'st'); l.setAttribute('x1', x); l.setAttribute('x2', x); l.setAttribute('y1', 30); l.setAttribute('y2', 38); g.appendChild(l);
+    const t = document.createElementNS(ns, 'text'); t.setAttribute('x', x); t.setAttribute('y', 58); t.setAttribute('text-anchor', 'middle'); t.textContent = hz + ' Hz'; g.appendChild(t);
   }
-});
+})();
+function updateStrip() {
+  const { A, B } = state, X = (s) => (s?.hz ? frac(s.hz) * 960 + 20 : null);
+  const xa = X(A), xb = X(B);
+  for (const [id, x] of [['stripA', xa], ['stripB', xb]]) { const c = $(id); c.style.opacity = x === null ? 0 : 1; if (x !== null) c.setAttribute('cx', x); const t = $(id + 'T'); t.style.opacity = x === null ? 0 : 1; if (x !== null) t.setAttribute('x', x); }
+  const gap = $('stripGap');
+  if (xa !== null && xb !== null) { gap.setAttribute('x1', xa); gap.setAttribute('x2', xb); gap.style.opacity = .7; } else gap.style.opacity = 0;
+}
 function styleRanges() {
-  for (const id of ['fine', 'atk']) {
-    const el = $(id), p = ((el.value - el.min) / (el.max - el.min)) * 100;
-    el.style.setProperty('--a', p + '%');
-  }
-  $('fine').style.background = (() => { const p = (($('fine').value - -100) / 200) * 100, c = '#ff8a1f', d = '#14162299';
-    return p >= 50 ? `linear-gradient(90deg,${d} 50%,${c} 50%,${c} ${p}%,${d} ${p}%)` : `linear-gradient(90deg,${d} ${p}%,${c} ${p}%,${c} 50%,${d} 50%)`; })();
+  const set = (id, s, e) => { $(id).style.setProperty('--s', s + '%'); $(id).style.setProperty('--e', e + '%'); };
+  const pf = ((Number($('fine').value) + 100) / 200) * 100; set('fine', Math.min(50, pf), Math.max(50, pf));
+  set('atk', 0, (Number($('atk').value) / 40) * 100);
 }
 styleRanges();

@@ -1,4 +1,5 @@
 import { detectPitch, matchSemitones, describeHz, spectrum, toMono, findOnset } from '../src/detect.js';
+import { analyzeAttack, applyAttackContour } from '../src/attack.js';
 import { stretchShift, varispeed, keepTransient, encodeWav, zipStore } from './shift.js';
 
 const $ = (id) => document.getElementById(id);
@@ -50,6 +51,8 @@ function render(slot) {
     k.appendChild(b);
   }
   setKnob(slot, d.hz);
+  s.attack = analyzeAttack(toMono(s.channels), s.sr, s.hz); s.spectro = null;
+  showAttack(slot);
   s.rtaStatic = null;
   ['A', 'B'].forEach((k) => state[k] && drawSpectrum(k));
   drawWave(slot);
@@ -113,6 +116,7 @@ function staticBands(slot) { // spectrum of the analysis window, normalised to i
 
 function drawSpectrum(slot, live = null, tag = '') {
   const s = state[slot]; if (!s) return;
+  if (s.view === 'spectro') return drawSpectrogram(slot);
   const { g, w, h, dpr } = sizeCanvas($('c' + slot)), N = RTA.N, bw = w / N, ph = h - 14 * dpr;
   const color = slot === 'A' ? '#ff8a1f' : '#4fe3f0';
   g.clearRect(0, 0, w, h);
@@ -158,7 +162,7 @@ function rtaFrame() {
   rta.events = rta.events.filter((e) => e.t1 > now);
   const act = [...rta.events].reverse().find((e) => now >= e.t0 && now <= e.t1);
   const nowShown = new Set();
-  if (act) {
+  if (act && state[act.slot].view !== 'spectro') {
     analyser.getFloatFrequencyData(fftBuf);
     const live = bands(fftBuf, ac.sampleRate / analyser.fftSize, -80, -8);
     rta.lastMax = Math.max(...live);
@@ -169,6 +173,54 @@ function rtaFrame() {
   rta.shown = nowShown;
   if (rta.events.length || nowShown.size) rta.raf = requestAnimationFrame(rtaFrame);
 }
+
+/* ---------- attack readout + spectrogram ---------- */
+function showAttack(slot) {
+  const a = state[slot].attack, el = $('atk' + slot);
+  const ico = '<svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>';
+  el.innerHTML = !a ? '' : a.hasSweep
+    ? `${ico}<span>Attack <b>${a.startHz.toFixed(0)} Hz</b> \u2192 body <b>${a.bodyHz.toFixed(0)} Hz</b> in ~${Math.round(a.tauMs * 3)} ms</span>`
+    : `${ico}<span>No pitch sweep in the attack</span>`;
+}
+function spectroData(slot) {
+  const s = state[slot]; if (s.spectro) return s.spectro;
+  const x = toMono(s.channels), on = findOnset(x, 0.1), W = Math.round(0.016 * s.sr), nF = 100, R = 72, hop = 0.002 * s.sr;
+  const cells = []; let mx = 0;
+  for (let f = 0; f < nF; f++) {
+    const s0 = on + Math.round(f * hop) - (W >> 1) - Math.round(0.004 * s.sr), seg = new Float32Array(W);
+    for (let i = 0; i < W; i++) { const j = s0 + i; if (j >= 0 && j < x.length) seg[i] = x[j]; }
+    const { mag, binHz } = spectrum(seg, s.sr, 8), col = new Float32Array(R);
+    for (let r = 0; r < R; r++) { const hz = RTA.F0 * Math.pow(RTA.F1 / RTA.F0, (r + 0.5) / R), k = hz / binHz, k0 = Math.floor(k); col[r] = mag[k0] * (1 - (k - k0)) + mag[k0 + 1] * (k - k0); mx = Math.max(mx, col[r]); }
+    cells.push(col);
+  }
+  return (s.spectro = { cells, mx, nF, R });
+}
+function drawSpectrogram(slot) {
+  const s = state[slot], { cells, mx, nF, R } = spectroData(slot), { g, w, h, dpr } = sizeCanvas($('c' + slot));
+  const color = slot === 'A' ? [255, 138, 31] : [79, 227, 240], ph = h - 14 * dpr, cw = w / nF, ch = ph / R;
+  g.clearRect(0, 0, w, h);
+  for (let f = 0; f < nF; f++) for (let r = 0; r < R; r++) {
+    const v = Math.pow(Math.max(0, Math.min(1, (20 * Math.log10(cells[f][r] / mx + 1e-9) + 34) / 34)), 1.8), a = Math.min(1, v * 1.4), wh = Math.max(0, v - 0.7) / 0.3;
+    g.fillStyle = `rgb(${Math.round(20 + (color[0] - 20) * a + 235 * wh * 0.7)},${Math.round(22 + (color[1] - 22) * a + 235 * wh * 0.7)},${Math.round(38 + (color[2] - 38) * a + 235 * wh * 0.7)})`;
+    g.fillRect(f * cw, ph - (r + 1) * ch, cw + 0.6, ch + 0.6);
+  }
+  const X = (ms) => ((ms + 4) / 2 / nF) * w, Y = (hz) => ph - rtaX(hz) * ph;
+  g.font = `${9 * dpr}px Inter, sans-serif`; g.fillStyle = '#ffffff77'; g.textAlign = 'center';
+  for (const ms of [50, 100, 150]) g.fillText(ms + ' ms', X(ms), h - 2 * dpr);
+  g.textAlign = 'left'; for (const hz of [50, 100, 200, 500]) { g.fillStyle = '#ffffff66'; g.fillText(String(hz), 3 * dpr, Y(hz) + 3 * dpr); }
+  const a = s.attack;
+  if (a) {
+    g.fillStyle = '#ffffffee'; for (const f of a.track) { if (f.hz > RTA.F0 && f.hz < RTA.F1) { g.beginPath(); g.arc(X(f.t), Y(f.hz), 2 * dpr, 0, 7); g.fill(); } }
+    g.save(); g.strokeStyle = '#ffffffaa'; g.lineWidth = dpr; g.setLineDash([3 * dpr, 3 * dpr]); g.beginPath(); g.moveTo(0, Y(a.bodyHz)); g.lineTo(w, Y(a.bodyHz)); g.stroke(); g.restore();
+    if (a.hasSweep) { g.fillStyle = '#fff'; g.font = `600 ${10 * dpr}px Inter, sans-serif`; g.fillText('attack', X(8) + 6 * dpr, Y(a.startHz) - 4 * dpr); }
+  }
+}
+document.querySelectorAll('.vt').forEach((box) => box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+  const slot = box.dataset.slot; if (!state[slot]) return;
+  state[slot].view = b.dataset.view;
+  box.querySelectorAll('button').forEach((o) => o.classList.toggle('on', o === b));
+  drawSpectrum(slot);
+})));
 
 /* ---------- knobs ---------- */
 const ARC = 358, FMIN = 30, FMAX = 800;
@@ -257,14 +309,17 @@ async function renderAudio() {
       if (!out[0].some((v) => Math.abs(v) > 1e-6)) throw new Error('stretch engine returned silence');
     } catch (e) { console.warn(e); fell = true; out = B.channels.map((c) => varispeed(c, st)); }
   } else out = B.channels.map((c) => varispeed(c, st));
-  const atk = Number($('atk').value);
+  const wantAtk = $('matchAtk').checked && $('mode').value === 'stretch' && !fell;
+  const canAtk = wantAtk && A.attack && B.attack && (A.attack.hasSweep || B.attack.hasSweep);
+  if (canAtk) out = out.map((c, i) => applyAttackContour(B.channels[i], c, B.sr, { attackA: A.attack, attackB: B.attack, bodyShiftSemis: st }));
+  const atk = canAtk ? 0 : Number($('atk').value);
   if (atk) out = out.map((c, i) => keepTransient(B.channels[i], c, B.sr, atk));
   if (token !== renderToken) return;
   if (state.matched?.url) URL.revokeObjectURL(state.matched.url);
   const blob = encodeWav(out, B.sr);
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
   const m = detectPitch(out, B.sr);
-  $('tnNote').textContent = (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '');
+  $('tnNote').textContent = (wantAtk && !canAtk ? 'Match attack is on, but neither sample has a pitch sweep. ' : '') + (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '');
   $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = false;
   $('dragOut').classList.add('ready');
   $('status').classList.remove('busy');
@@ -359,6 +414,7 @@ document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('clic
   document.querySelectorAll('[data-mode]').forEach((o) => o.classList.toggle('on', o === b));
   update();
 }));
+$('matchAtk').addEventListener('change', () => { $('atkL').classList.toggle('on', $('matchAtk').checked); $('atk').disabled = $('matchAtk').checked; $('atk').title = $('matchAtk').checked ? 'Replaced by Match attack' : ''; update(); });
 $('fold').addEventListener('change', () => { $('foldL').classList.toggle('on', $('fold').checked); manual = null; update(); });
 ['fine', 'atk'].forEach((id) => $(id).addEventListener('input', () => update(150)));
 window.addEventListener('resize', () => ['A', 'B'].forEach((s) => { if (state[s]) { drawWave(s); drawSpectrum(s); } }));

@@ -155,6 +155,15 @@
   .tuner.off .tn-needle { animation:edge .9s ease-in-out infinite alternate; } @keyframes edge { from { opacity:.5; } to { opacity:1; } }
   .tn-scale { display:flex; justify-content:space-between; font:500 10px var(--font); color:var(--dim); margin-top:3px; }
   .tn-note { min-height:14px; margin-top:4px; font:400 11px var(--font); color:var(--dim); text-align:center; }
+
+  .atk { font-size:12px; color:var(--dim); display:flex; align-items:center; gap:6px; min-height:18px; }
+  .atk b { color:var(--ink); font-weight:500; } .atk svg.i { width:15px; height:15px; }
+  .spec { position:relative; height:112px; }
+  .vt { position:absolute; right:6px; top:6px; display:flex; gap:2px; z-index:2; }
+  .vt button { padding:4px 6px; border-radius:8px; background:#12142499; box-shadow:none; color:var(--dim); }
+  .vt button.on { color:#fff; background:#ffffff22; }
+  .vt svg.i { width:15px; height:15px; }
+  input[type=range]:disabled { opacity:.35; cursor:default; }
 </style>
 </head>
 <body>
@@ -169,6 +178,8 @@
         <button data-mode="vari" title="Pitch and length change together, like a sampler">
           <svg class="i" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>Varispeed</button>
       </div>
+      <label class="pill" id="atkL" title="Make B's attack follow A's pitch sweep, not just its settled note. Works in Keep length mode.">
+        <input type="checkbox" id="matchAtk"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Match attack</label>
       <label class="pill" id="foldL" title="Shift by at most 6 semitones, ignoring octave differences">
         <input type="checkbox" id="fold"><svg class="i" viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg>Ignore octave</label>
     </div>
@@ -194,10 +205,12 @@
         <div class="info">
           <div class="hz" id="hzA">&ndash;<small>Hz</small></div>
           <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span></div>
+          <div class="atk" id="atkA" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kA"></div>
         </div>
       </div>
-      <div class="spec"><canvas id="cA"></canvas></div>
+      <div class="spec"><canvas id="cA"></canvas>
+        <div class="vt" data-slot="A"><button class="on" data-view="bars" title="Spectrum: live analyzer bars"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20V10M20 20V15"/></svg></button><button data-view="spectro" title="Spectrogram: pitch over the first 200 ms, to see the attack"><svg class="i" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 16c3 0 2-8 6-8s2 4 6 4"/></svg></button></div></div>
       <div class="actions">
         <button class="fill" id="playA" disabled title="Play A"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
         <button id="earA" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>
@@ -256,10 +269,12 @@
         <div class="info">
           <div class="hz" id="hzB">&ndash;<small>Hz</small></div>
           <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span></div>
+          <div class="atk" id="atkB" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kB"></div>
         </div>
       </div>
-      <div class="spec"><canvas id="cB"></canvas></div>
+      <div class="spec"><canvas id="cB"></canvas>
+        <div class="vt" data-slot="B"><button class="on" data-view="bars" title="Spectrum: live analyzer bars"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20V10M20 20V15"/></svg></button><button data-view="spectro" title="Spectrogram: pitch over the first 200 ms, to see the attack"><svg class="i" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 16c3 0 2-8 6-8s2 4 6 4"/></svg></button></div></div>
       <div class="actions">
         <button class="fill" id="playB" disabled title="Play B"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
         <button id="earB" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>

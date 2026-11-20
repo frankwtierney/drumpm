@@ -1,14 +1,7 @@
 import SignalsmithStretch from './vendor/SignalsmithStretch.mjs';
 
-/** Varispeed: resample by ratio (pitch and duration both change). Linear-interp on a Float32Array. */
-export function varispeed(x, semitones) {
-  const ratio = Math.pow(2, semitones / 12), n = Math.floor((x.length - 1) / ratio), out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const p = i * ratio, k = Math.floor(p), f = p - k;
-    out[i] = x[k] * (1 - f) + x[k + 1] * f;
-  }
-  return out;
-}
+import { varispeed } from './shift-pure.mjs';
+export { varispeed };
 
 /**
  * Time-preserving pitch shift with Signalsmith Stretch, rendered offline.

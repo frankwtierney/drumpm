@@ -1,4 +1,4 @@
-# Drum Clone
+# DrumKlone
 
 Be a dead ringer for any drum. Drop in drum sample A to detect its pitch, drop in sample B, and retune B to match A.
 

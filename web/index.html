@@ -212,7 +212,6 @@
   /* sliders now sit beside the semitone dial */
   .match .info { gap:14px; }
   .match .info .sl .h { margin-bottom:4px; } .match .info .sl .h .t { gap:6px; }
-  .conf .mini { margin-left:auto; padding:3px 7px; border-radius:999px; } .conf .mini svg.i { width:13px; height:13px; }
   .knob.live { cursor:grab; touch-action:none; } .knob.live:active { cursor:grabbing; } .knob:focus-visible { outline:1px dashed var(--c, #c9ccff); outline-offset:5px; border-radius:50%; }
   /* the match column is the tallest; the sample columns sit a touch shorter */
   .stage { align-items:stretch; }
@@ -260,7 +259,7 @@
         </div>
         <div class="info">
           <div class="hz" id="hzA">&ndash;<small>Hz</small></div>
-          <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span><button class="mini" id="rstA" hidden title="Restore the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 1 1 0 10H8M4 9l4-4M4 9l4 4"/></svg></button></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span></div>
           <div class="atk" id="atkA" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kA"></div>
         </div>
@@ -327,7 +326,7 @@
         </div>
         <div class="info">
           <div class="hz" id="hzB">&ndash;<small>Hz</small></div>
-          <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span><button class="mini" id="rstB" hidden title="Restore the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 1 1 0 10H8M4 9l4-4M4 9l4 4"/></svg></button></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span></div>
           <div class="atk" id="atkB" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kB"></div>
         </div>

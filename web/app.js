@@ -20,7 +20,7 @@ async function loadFile(slot, file) {
     const buf = await ac.decodeAudioData(await file.arrayBuffer());
     const channels = Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c).slice());
     const det = detectPitch(channels, buf.sampleRate);
-    state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz, detHz: det.hz };
+    state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz };
     manual = null;
     render(slot);
     await update();
@@ -33,13 +33,12 @@ async function loadFile(slot, file) {
 /* ---------- per-sample view ---------- */
 // Everything that depends on the current pitch (detected or set by hand).
 function showPitch(slot) {
-  const s = state[slot], d = s.det, manualPitch = s.detHz != null && s.hz != null && Math.abs(s.hz - s.detHz) > 1e-6;
+  const s = state[slot], d = s.det;
   $('p' + slot).textContent = d.hz ? d.note : 'N/A';
   $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents} cents` : 'no pitch';
   $('hz' + slot).innerHTML = d.hz ? `${d.hz.toFixed(1)}<small>Hz</small>` : `&ndash;<small>Hz</small>`;
-  $('conf' + slot).dataset.l = manualPitch ? 3 : !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
-  $('confT' + slot).textContent = manualPitch ? 'Set by hand' : !d.hz ? 'No pitch found' : d.confidence > 0.75 ? 'Confident' : d.confidence > 0.45 ? 'Fairly sure' : 'Unsure, pick a partial';
-  $('rst' + slot).hidden = !manualPitch;
+  $('conf' + slot).dataset.l = !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
+  $('confT' + slot).textContent = !d.hz ? 'No pitch found' : d.confidence > 0.75 ? 'Confident' : d.confidence > 0.45 ? 'Fairly sure' : 'Unsure, pick a partial';
   const k = $('k' + slot); k.textContent = '';
   if ((d.peaks || []).length) {
     const l = document.createElement('span'); l.className = 'lbl'; l.textContent = 'Pitch candidates:'; l.title = 'Detected frequency peaks. Click one to use it as the pitch.'; k.appendChild(l);
@@ -54,7 +53,7 @@ function showPitch(slot) {
   ['A', 'B'].forEach((k2) => state[k2] && drawSpectrum(k2));
 }
 
-// Set a sample's pitch by hand (dial, scroll, arrow keys, candidate chips). The light parts update at once;
+// Choose a different detected pitch (candidate chips). The light parts update at once;
 // attack analysis and the re-render wait until the hand stops moving.
 function commitPitch(slot, hz) {
   const s = state[slot]; if (!s) return;
@@ -73,7 +72,6 @@ function render(slot) {
   showAttack(slot);
   showPitch(slot);
   drawWave(slot);
-  document.querySelector(`[data-knob=${slot}]`).parentElement.classList.add('live');
   $('play' + slot).disabled = $('ear' + slot).disabled = false;
 }
 
@@ -384,18 +382,6 @@ const KEYDIR = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
   });
   $('autoBtn').onclick = () => setManual(null);
 })();
-
-// Sample dials: override the detected pitch by hand (log scale 30..800 Hz). Double-click or the reset button restores it.
-for (const slot of ['A', 'B']) {
-  const knob = document.querySelector(`[data-knob=${slot}]`).parentElement, ready = () => !!state[slot];
-  knob.tabIndex = 0; knob.title = 'Drag, scroll, or use the arrow keys to set the pitch by hand. Shift = bigger steps, Alt = finer. Double-click to restore the detected pitch.';
-  const nudge = (n, e) => { const s = state[slot]; if (s) commitPitch(slot, (s.hz || 100) * Math.pow(2, (n * (e.shiftKey ? 100 : e.altKey ? 1 : 10)) / 1200)); };
-  dialDrag(knob, ready, (deg) => commitPitch(slot, Math.round(FMIN * Math.pow(FMAX / FMIN, (deg + 135) / 270) * 10) / 10));
-  knob.addEventListener('dblclick', () => { if (state[slot]?.detHz) commitPitch(slot, state[slot].detHz); });
-  $('rst' + slot).onclick = () => { if (state[slot]?.detHz) commitPitch(slot, state[slot].detHz); };
-  knob.addEventListener('keydown', (e) => { const d = KEYDIR[e.key]; if (d) { e.preventDefault(); nudge(d, e); } });
-  onWheel(knob, nudge);
-}
 
 /* ---------- playback ---------- */
 function play(channels, sr, when = 0, slot = null, tag = '') {

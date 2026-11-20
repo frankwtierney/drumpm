@@ -7,27 +7,30 @@ const state = { A: null, B: null, matched: null };
 let pendingSlot = null;
 
 async function loadFile(slot, file) {
-  $('status').textContent = `Decoding ${file.name}...`;
+  $('status').classList.add('busy');
   const buf = await ac.decodeAudioData(await file.arrayBuffer());
   const channels = Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c).slice());
   const det = detectPitch(channels, buf.sampleRate);
   state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz, buf };
   render(slot);
-  $('status').textContent = '';
+  $('status').classList.remove('busy');
   await update();
 }
 
 function render(slot) {
   const s = state[slot], d = s.det;
+  $('p' + slot).classList.remove('ring-ico');
   $('p' + slot).textContent = d.hz ? d.note : 'N/A';
-  $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents} CENTS` : 'no pitch';
-  $('hz' + slot).textContent = d.hz ? `${d.hz.toFixed(1)} Hz` : '- Hz';
-  $('s' + slot).textContent = d.hz ? `${s.name} / ${(d.confidence * 100).toFixed(0)}% confidence${d.confidence < 0.5 ? ' / low: try another peak' : ''}` : s.name;
+  $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents}\u00a2` : '';
+  $('hz' + slot).textContent = d.hz ? `${d.hz.toFixed(1)} Hz` : '';
+  $('s' + slot).textContent = s.name; $('s' + slot).title = s.name;
+  $('conf' + slot).dataset.l = !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
+  $('conf' + slot).title = `Confidence ${(d.confidence * 100).toFixed(0)}% (${d.method})`;
   setKnob(slot, d.hz);
   const k = $('k' + slot); k.textContent = '';
   for (const p of d.peaks || []) {
     const b = document.createElement('button'); b.className = Math.abs(p.hz - s.hz) < 0.01 ? 'sel' : '';
-    b.textContent = `${p.hz.toFixed(1)} Hz (${p.db.toFixed(0)} dB)`;
+    b.textContent = p.hz.toFixed(0); b.title = `${p.hz.toFixed(1)} Hz, ${p.db.toFixed(0)} dB`;
     b.onclick = () => { s.hz = p.hz; Object.assign(s.det, describeHz(p.hz), { hz: p.hz }); render(slot); update(); };
     k.appendChild(b);
   }
@@ -68,14 +71,16 @@ let renderToken = 0;
 async function update() {
   $('fineV').textContent = $('fine').value; $('atkV').textContent = $('atk').value; styleRanges();
   const st = shiftAmount();
-  if (st === null) { $('distance').textContent = 'Load both samples'; $('shiftInfo').textContent = ''; $('shiftBig').textContent = '\u2013'; $('playM').disabled = $('dl').disabled = true; return; }
+  if (st === null) { $('distance').innerHTML = ''; $('distance').classList.add('empty'); $('shiftBig').textContent = '\u2013'; $('playM').disabled = $('dl').disabled = true; return; }
   const base = shiftAmount0(), dist = Math.abs(base), whole = Math.floor(dist + 1e-9), cts = Math.round((dist - whole) * 100);
   const [w2, c2] = cts === 100 ? [whole + 1, 0] : [whole, cts];
-  $('distance').innerHTML = Math.abs(base) < 0.005 ? 'B is in tune with A'
-    : `B is <em>${w2} semitones ${c2} cents</em><br>${base < 0 ? 'above' : 'below'} A &middot; shift <span class="${base < 0 ? 'dn' : 'up'}">${base < 0 ? 'down' : 'up'}</span>`;
-  $('shiftBig').textContent = (st >= 0 ? '+' : '\u2212') + Math.abs(st).toFixed(2); $('shiftInfo').textContent = 'applied to B';
+  const ARR = { up: '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>', dn: '<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>', ok: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>' };
+  $('distance').classList.remove('empty');
+  $('distance').innerHTML = Math.abs(base) < 0.005 ? `<span class="ar up">${ARR.ok}</span>`
+    : `<span class="ar ${base < 0 ? 'dn' : 'up'}" title="${base < 0 ? 'B is above A: shift down' : 'B is below A: shift up'}">${base < 0 ? ARR.dn : ARR.up}</span><span>${w2} st ${c2}\u00a2</span>`;
+  $('shiftBig').textContent = (st >= 0 ? '+' : '\u2212') + Math.abs(st).toFixed(2); 
   const token = ++renderToken, B = state.B;
-  $('status').textContent = 'Rendering...';
+  $('status').classList.add('busy');
   let out;
   if ($('mode').value === 'stretch') out = await stretchShift(B.channels, B.sr, st);
   else out = B.channels.map((c) => varispeed(c, st));
@@ -84,7 +89,7 @@ async function update() {
   if (token !== renderToken) return;
   state.matched = { channels: out, sr: B.sr };
   $('playM').disabled = $('dl').disabled = false;
-  $('status').textContent = `rendered ${(out[0].length / B.sr * 1000).toFixed(0)} ms`;
+  $('status').classList.remove('busy');
   window.__renderDone = (window.__renderDone || 0) + 1;
 }
 
@@ -159,3 +164,11 @@ function styleRanges() {
   set('atk', 0, (Number($('atk').value) / 40) * 100);
 }
 styleRanges();
+
+// icon toggles
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+  $('mode').value = b.dataset.mode;
+  document.querySelectorAll('[data-mode]').forEach((o) => o.classList.toggle('on', o === b));
+  update();
+}));
+$('fold').addEventListener('change', () => $('foldL').classList.toggle('on', $('fold').checked));

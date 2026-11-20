@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:#08090a; --fg:#f4f4f5; --dim:#74777e; --faint:#2a2c31; --hair:#ffffff14;
+    --bg:#08090a; --fg:#f4f4f5; --dim:#8b8e96; --faint:#2a2c31; --hair:#ffffff14;
     --a:#f4f4f5; --b:#7ef0cf;
     --sans:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -22,7 +22,7 @@
   header { display:flex; align-items:center; justify-content:space-between; gap:20px; }
   .brand { font:200 17px var(--sans); letter-spacing:.42em; text-transform:uppercase; }
   .brand i { font-style:normal; color:var(--b); }
-  .opts { display:flex; gap:26px; align-items:center; }
+  .opts { display:flex; gap:6px; align-items:center; }
 
   button, select, .toggle { font:400 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
     background:none; border:0; padding:0; cursor:pointer; transition:color .2s, border-color .2s, background .2s; }
@@ -65,7 +65,7 @@
   .peaks button { font-size:9px; padding:2px 0; border-bottom:1px solid transparent; }
   .peaks button.sel { color:var(--c); border-color:var(--c); }
   canvas { width:100%; height:52px; display:block; margin-top:8px; opacity:.9; }
-  .row { display:flex; gap:22px; justify-content:center; align-items:center; margin-top:18px; }
+  .row { display:flex; gap:10px; justify-content:center; align-items:center; margin-top:14px; }
 
   .center { display:flex; flex-direction:column; gap:30px; text-align:center; padding-top:26px; }
   .big { font:200 clamp(60px,9vw,92px)/1 var(--sans); letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
@@ -91,72 +91,99 @@
   .strip .st { stroke:var(--faint); }
   .strip .gap { stroke:var(--fg); stroke-width:1.5; opacity:.7; transition:all .6s cubic-bezier(.2,.8,.2,1); }
   .strip circle { transition:cx .6s cubic-bezier(.2,.8,.2,1); }
+
+  svg.i { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ib { width:38px; height:38px; display:inline-grid; place-items:center; border-radius:50%; border:1px solid transparent; color:var(--dim); }
+  .ib:hover { color:var(--fg); border-color:var(--faint); }
+  .ib.on { color:var(--fg); border-color:#ffffff40; background:#ffffff0a; }
+  .ib.lg { width:64px; height:64px; background:var(--fg); color:#0a0a0b; border-color:var(--fg); }
+  .ib.lg:hover { background:#fff; box-shadow:0 0 34px #ffffff33; color:#000; }
+  .ib.lg svg.i { width:24px; height:24px; fill:currentColor; stroke-width:1; }
+  .ib.fill svg.i { fill:currentColor; stroke-width:1; }
+  .voice .head { display:flex; justify-content:center; }
+  .badge { width:30px; height:30px; border-radius:50%; border:1px solid var(--c); color:var(--c); display:grid; place-items:center; font:300 13px var(--mono); }
+  .voice.b .badge { box-shadow:0 0 12px #7ef0cf44; }
+  .conf { display:inline-flex; gap:2px; align-items:flex-end; height:10px; margin-right:8px; vertical-align:middle; }
+  .conf i { width:2px; background:var(--faint); border-radius:1px; } .conf i:nth-child(1){height:4px} .conf i:nth-child(2){height:7px} .conf i:nth-child(3){height:10px}
+  .conf[data-l="1"] i:nth-child(-n+1), .conf[data-l="2"] i:nth-child(-n+2), .conf[data-l="3"] i { background:var(--c); }
+  .fname { display:inline-block; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
+  .iconrow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .iconrow .lead { color:var(--dim); display:flex; align-items:center; gap:10px; } .iconrow b { font:300 12px var(--mono); color:var(--fg); letter-spacing:.1em; }
+  .verdict { display:flex; justify-content:center; align-items:center; gap:10px; font:300 16px var(--mono); letter-spacing:.12em; color:var(--fg); margin-top:16px; min-height:30px; }
+  .verdict .ar { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; border:1px solid currentColor; }
+  .verdict .ar svg.i { width:16px; height:16px; }
+  .verdict .dn { color:var(--b); } .verdict .up { color:var(--a); }
+  .verdict.empty { color:var(--faint); }
+  #status { height:6px; }
+  #status.busy::after { content:''; display:block; width:6px; height:6px; margin:auto; border-radius:50%; background:var(--b); animation:pulse .8s ease-in-out infinite alternate; }
+  @keyframes pulse { from { opacity:.2; } to { opacity:1; } }
+  select.oct { padding:4px 2px; width:44px; text-align:center; }
+  .ring-ico { color:var(--dim); } .ring-ico svg.i { width:34px; height:34px; stroke-width:1; }
+  .peaks button { font-size:10px; }
 </style>
 </head>
+
 <body>
 <div class="wrap">
   <header>
     <div class="brand">drum<i>/</i>pitch</div>
     <div class="opts">
-      <select id="mode" title="Pitch shift mode">
-        <option value="stretch">Time-preserving</option>
-        <option value="vari">Varispeed</option>
-      </select>
-      <label class="toggle"><input type="checkbox" id="fold">Fold octave</label>
+      <select id="mode" hidden><option value="stretch">stretch</option><option value="vari">vari</option></select>
+      <button class="ib on" data-mode="stretch" title="Time-preserving: keeps the sample length"><svg class="i" viewBox="0 0 24 24"><path d="M4 6v12M20 6v12M4 12h16"/></svg></button>
+      <button class="ib" data-mode="vari" title="Varispeed: pitch and length change together"><svg class="i" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+      <label class="ib" id="foldL" title="Fold octave: shift by at most 6 semitones"><input type="checkbox" id="fold" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg></label>
     </div>
   </header>
 
   <div class="stage">
     <section class="voice a">
-      <div class="label">A &middot; reference</div>
-      <div class="ringbox drop" data-slot="A">
+      <div class="head"><div class="badge">A</div></div>
+      <div class="ringbox drop" data-slot="A" title="Drop or click to load sample A">
         <svg viewBox="0 0 200 200" data-knob="A">
           <circle class="track" cx="100" cy="100" r="88" stroke-dasharray="415 600" transform="rotate(135 100 100)"/>
           <circle class="arc" cx="100" cy="100" r="88" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
           <g class="dot"><circle cx="100" cy="12" r="4.5"/></g>
         </svg>
-        <div class="inner"><div class="note" id="pA">&ndash;</div><div class="cents" id="cenA">DROP SAMPLE</div></div>
+        <div class="inner"><div class="note ring-ico" id="pA"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><div class="cents" id="cenA"></div></div>
       </div>
       <div class="hz" id="hzA">&nbsp;</div>
-      <div class="meta" id="sA"></div>
+      <div class="meta"><span class="conf" id="confA" data-l="0"><i></i><i></i><i></i></span><span class="fname" id="sA"></span></div>
       <div class="peaks" id="kA"></div>
       <canvas id="cA"></canvas>
-      <div class="row"><button id="playA" disabled>Play</button><button id="earA" disabled>Check by ear</button><select id="octA" title="Play down octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div>
+      <div class="row"><button class="ib fill" id="playA" disabled title="Play"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="earA" disabled title="Check by ear: plays a tone at the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg></button><select class="oct" id="octA" title="Octaves down for ear check"><option value="0">0</option><option value="-12">&minus;1</option><option value="-24">&minus;2</option></select></div>
     </section>
 
     <section class="center">
       <div>
-        <div class="label">B relative to A</div>
-        <div style="margin-top:22px"><span class="big" id="shiftBig">&ndash;</span><small class="big" style="font-size:11px">ST</small></div>
-        <div class="verdict" id="distance">Load both samples</div>
-        <div class="label" id="shiftInfo" style="margin-top:2px"></div>
+        <div class="big" id="shiftBig">&ndash;</div>
+        <div class="verdict empty" id="distance"></div>
+        <div id="shiftInfo" hidden></div>
       </div>
-      <div class="ctl"><div class="h">Fine <b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
-      <div class="ctl"><div class="h">Keep attack <b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
-      <div class="tools"><button class="btn solid" id="playM" disabled>Play matched</button><button class="btn" id="dl" disabled>Download</button></div>
+      <div class="ctl"><div class="iconrow"><span class="lead" title="Fine tune"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg></span><b><span id="fineV">0</span>&cent;</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
+      <div class="ctl"><div class="iconrow"><span class="lead" title="Keep the original attack (ms)"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg></span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
+      <div class="tools"><button class="ib lg" id="playM" disabled title="Play matched B"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="dl" disabled title="Download WAV" style="align-self:center"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg></button></div>
       <div id="status"></div>
     </section>
 
     <section class="voice b">
-      <div class="label">B &middot; to retune</div>
-      <div class="ringbox drop" data-slot="B">
+      <div class="head"><div class="badge">B</div></div>
+      <div class="ringbox drop" data-slot="B" title="Drop or click to load sample B">
         <svg viewBox="0 0 200 200" data-knob="B">
           <circle class="track" cx="100" cy="100" r="88" stroke-dasharray="415 600" transform="rotate(135 100 100)"/>
           <circle class="arc" cx="100" cy="100" r="88" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
           <g class="dot"><circle cx="100" cy="12" r="4.5"/></g>
         </svg>
-        <div class="inner"><div class="note" id="pB">&ndash;</div><div class="cents" id="cenB">DROP SAMPLE</div></div>
+        <div class="inner"><div class="note ring-ico" id="pB"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><div class="cents" id="cenB"></div></div>
       </div>
       <div class="hz" id="hzB">&nbsp;</div>
-      <div class="meta" id="sB"></div>
+      <div class="meta"><span class="conf" id="confB" data-l="0"><i></i><i></i><i></i></span><span class="fname" id="sB"></span></div>
       <div class="peaks" id="kB"></div>
       <canvas id="cB"></canvas>
-      <div class="row"><button id="playB" disabled>Play</button><button id="earB" disabled>Check by ear</button><select id="octB" title="Play down octaves"><option value="0">0 oct</option><option value="-12">-1 oct</option><option value="-24">-2 oct</option></select></div>
+      <div class="row"><button class="ib fill" id="playB" disabled title="Play"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="earB" disabled title="Check by ear: plays a tone at the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg></button><select class="oct" id="octB" title="Octaves down for ear check"><option value="0">0</option><option value="-12">&minus;1</option><option value="-24">&minus;2</option></select></div>
     </section>
   </div>
 
   <div class="strip">
-    <svg viewBox="0 0 1000 64" preserveAspectRatio="none" id="strip" style="display:none"></svg>
     <svg viewBox="0 0 1000 64" id="stripSvg">
       <g id="stripTicks"></g>
       <line class="scale" x1="0" y1="34" x2="1000" y2="34"/>

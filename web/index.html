@@ -5,197 +5,243 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drum Pitch Match</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Inter:wght@300;400;500;600&family=Yellowtail&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:#08090a; --fg:#f4f4f5; --dim:#8b8e96; --faint:#2a2c31; --hair:#ffffff14;
-    --a:#f4f4f5; --b:#7ef0cf;
-    --sans:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --orange:#ff8a1f; --cyan:#4fe3f0; --ink:#eceef9; --dim:#9498b6; --faint:#ffffff14;
+    --font:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; --display:'Michroma', 'Inter', sans-serif;
   }
   * { box-sizing:border-box; }
-  html { background:var(--bg); }
-  body { margin:0; min-height:100vh; color:var(--fg); font:300 14px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
-    background:radial-gradient(900px 500px at 50% -10%, #17191f 0%, transparent 70%), var(--bg); }
-  .wrap { max-width:1120px; margin:0 auto; padding:34px 28px 56px; }
+  [hidden] { display:none !important; }
+  html { min-height:100%; background:radial-gradient(1100px 650px at 75% -10%, #565980 0%, transparent 60%), linear-gradient(160deg,#171a29,#33364f 70%,#44476a); }
+  body { margin:0; min-height:100vh; padding:26px 16px 40px; display:grid; place-items:start center; color:var(--ink); font:400 13px/1.45 var(--font); -webkit-font-smoothing:antialiased; }
+  .plugin { width:min(1220px,100%); border-radius:30px; padding:22px 26px 26px;
+    background:linear-gradient(135deg,#242840 0%,#32364f 50%,#47496b 100%);
+    box-shadow:0 40px 80px -24px #000c, 0 0 0 1px #ffffff12 inset, 0 2px 0 #ffffff1c inset; }
 
-  header { display:flex; align-items:center; justify-content:space-between; gap:20px; }
-  .brand { font:200 17px var(--sans); letter-spacing:.42em; text-transform:uppercase; }
-  .brand i { font-style:normal; color:var(--b); }
-  .opts { display:flex; gap:6px; align-items:center; }
+  /* header */
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .logo { font:400 38px/1 'Yellowtail', cursive; color:#dcdef5; text-shadow:0 2px 0 #0007; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .seg { display:inline-flex; padding:4px; border-radius:999px; background:#171a2a; box-shadow:0 2px 6px #000a inset, 0 1px 0 #ffffff14; }
+  .seg button { border-radius:999px; padding:8px 16px; background:none; box-shadow:none; color:var(--dim); }
+  .seg button.on { color:#fff; background:linear-gradient(180deg,#4a4e72,#31354f); box-shadow:0 4px 10px -3px #000b, 0 1px 0 #ffffff2a inset; }
 
-  button, select, .toggle { font:400 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
-    background:none; border:0; padding:0; cursor:pointer; transition:color .2s, border-color .2s, background .2s; }
-  button:hover, select:hover, .toggle:hover { color:var(--fg); }
-  button:disabled { opacity:.3; cursor:default; pointer-events:none; }
-  select { appearance:none; -webkit-appearance:none; border-bottom:1px solid var(--faint); padding:4px 0; color:var(--fg); }
-  select option { background:#15171a; color:var(--fg); }
-  .toggle { display:inline-flex; align-items:center; gap:9px; user-select:none; }
-  .toggle input { display:none; }
-  .toggle::before { content:''; width:7px; height:7px; border-radius:50%; border:1px solid var(--dim); transition:.2s; }
-  .toggle:has(input:checked) { color:var(--fg); }
-  .toggle:has(input:checked)::before { background:var(--b); border-color:var(--b); box-shadow:0 0 8px var(--b); }
-  .btn { border:1px solid var(--faint); border-radius:999px; padding:11px 22px; color:var(--fg); }
-  .btn:hover { border-color:#ffffff55; }
-  .btn.solid { background:var(--fg); color:#0a0a0b; border-color:var(--fg); font-weight:400; }
-  .btn.solid:hover { background:#fff; box-shadow:0 0 30px #ffffff30; }
-  .btn.sm { padding:8px 16px; }
+  /* shared controls */
+  button, select, .pill { font:600 11px var(--font); letter-spacing:.1em; text-transform:uppercase; color:var(--ink); border:0; cursor:pointer;
+    border-radius:999px; padding:10px 18px; display:inline-flex; align-items:center; gap:8px;
+    background:linear-gradient(180deg,#464a6b,#2b2f47); box-shadow:0 6px 12px -5px #000b, 0 1px 0 #ffffff26 inset, 0 0 0 1px #0007; transition:color .15s, box-shadow .15s, transform .05s; }
+  button:hover, select:hover, .pill:hover { color:#fff; }
+  button:active { transform:translateY(1px); }
+  button:disabled { opacity:.35; cursor:default; pointer-events:none; }
+  select { appearance:none; -webkit-appearance:none; padding:9px 14px; }
+  select option { background:#2b2f47; }
+  .pill input { display:none; }
+  .pill.on { color:var(--cyan); box-shadow:0 0 14px #4fe3f044, 0 6px 12px -5px #000b, 0 0 0 1px #4fe3f088; }
+  svg.i { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .fill svg.i { fill:currentColor; stroke-width:1; }
 
-  .stage { display:grid; grid-template-columns:1fr minmax(250px,320px) 1fr; gap:36px; margin-top:44px; align-items:start; }
-  @media (max-width:940px) { .stage { grid-template-columns:1fr 1fr; } .center { grid-column:1 / -1; order:3; } }
-  @media (max-width:600px) { .stage { grid-template-columns:1fr; } }
+  /* workflow layout */
+  .stage { display:grid; grid-template-columns:1fr 340px 1fr; gap:22px; margin-top:20px; align-items:stretch; }
+  @media (max-width:1040px) { .stage { grid-template-columns:1fr 1fr; } .match { grid-column:1 / -1; order:3; } }
+  @media (max-width:640px) { .stage { grid-template-columns:1fr; } }
+  .card { background:linear-gradient(180deg,#ffffff0b,#ffffff04); border:1px solid var(--faint); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .step { display:flex; align-items:center; gap:10px; font:600 11px var(--font); letter-spacing:.18em; text-transform:uppercase; color:var(--dim); }
+  .step .n { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font:600 12px var(--font); color:#14162a; background:var(--c); box-shadow:0 0 12px var(--glow); }
+  .step b { color:var(--ink); font-weight:600; }
+  .a { --c:var(--orange); --glow:#ff8a1f88; } .b { --c:var(--cyan); --glow:#4fe3f088; } .m { --c:#c9ccff; --glow:#c9ccff66; }
 
-  .label { font:400 10px var(--mono); letter-spacing:.26em; text-transform:uppercase; color:var(--dim); text-align:center; }
-  .voice.a { --c:var(--a); } .voice.b { --c:var(--b); }
-  .ringbox { position:relative; width:min(290px,100%); aspect-ratio:1; margin:18px auto 0; cursor:pointer; }
-  .ringbox svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
-  .ringbox .track { fill:none; stroke:var(--faint); stroke-width:1; }
-  .ringbox .arc { fill:none; stroke:var(--c); stroke-width:2; stroke-linecap:round; transition:stroke-dasharray .6s cubic-bezier(.2,.8,.2,1); }
-  .voice.b .arc, .voice.b .dot circle { filter:drop-shadow(0 0 5px #7ef0cf88); }
-  .dot { transition:transform .6s cubic-bezier(.2,.8,.2,1); transform-origin:100px 100px; }
-  .dot circle { fill:var(--bg); stroke:var(--c); stroke-width:1.5; }
-  .ringbox::after { content:''; position:absolute; inset:-10px; border-radius:50%; border:1px dashed transparent; transition:.2s; pointer-events:none; }
-  .ringbox.over::after, .ringbox:hover::after { border-color:#ffffff22; }
-  .inner { position:absolute; inset:0; display:grid; place-content:center; text-align:center; pointer-events:none; }
-  .note { font:200 clamp(54px,8vw,76px)/1 var(--sans); letter-spacing:-.02em; }
-  .cents { margin-top:8px; font:300 11px var(--mono); letter-spacing:.16em; color:var(--dim); }
-  .hz { text-align:center; margin-top:22px; font:300 13px var(--mono); letter-spacing:.2em; color:var(--fg); }
-  .meta { text-align:center; margin-top:4px; font:300 10px var(--mono); letter-spacing:.1em; color:var(--dim); min-height:15px; word-break:break-word; }
-  .peaks { display:flex; flex-wrap:wrap; justify-content:center; gap:4px 16px; margin:14px 0 6px; min-height:22px; }
-  .peaks button { font-size:9px; padding:2px 0; border-bottom:1px solid transparent; }
-  .peaks button.sel { color:var(--c); border-color:var(--c); }
-  canvas { width:100%; height:52px; display:block; margin-top:8px; opacity:.9; }
-  .row { display:flex; gap:10px; justify-content:center; align-items:center; margin-top:14px; }
+  /* drop zones */
+  .zone { position:relative; height:150px; border-radius:16px; cursor:pointer; overflow:hidden; background:#14172699; box-shadow:0 3px 10px #0009 inset, 0 1px 0 #ffffff14;
+    border:1.5px dashed #ffffff30; transition:border-color .15s, background .15s, box-shadow .15s; outline:none; }
+  .zone:hover, .zone:focus-visible { border-color:var(--c); }
+  .zone.over { border-color:var(--c); border-style:solid; background:#1d2036; box-shadow:0 0 0 3px var(--glow), 0 3px 10px #0009 inset; }
+  .zone.has { border-style:solid; border-color:#ffffff1c; }
+  .zone canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .empty { position:absolute; inset:0; display:grid; place-content:center; justify-items:center; gap:6px; text-align:center; color:var(--dim); }
+  .empty svg.i { width:34px; height:34px; color:var(--c); stroke-width:1.4; }
+  .empty b { color:var(--ink); font:600 14px var(--font); } .empty span { font-size:12px; }
+  .zone.has .empty { display:none; }
+  .fn { position:absolute; left:12px; top:9px; font:500 11px var(--font); color:#ffffffb0; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-shadow:0 1px 3px #000; display:none; }
+  .zone.has .fn { display:block; }
+  .swap { position:absolute; right:10px; top:8px; font:500 10px var(--font); letter-spacing:.1em; text-transform:uppercase; color:#ffffff90; display:none; text-shadow:0 1px 3px #000; }
+  .zone.has:hover .swap { display:block; }
 
-  .center { display:flex; flex-direction:column; gap:30px; text-align:center; padding-top:26px; }
-  .big { font:200 clamp(60px,9vw,92px)/1 var(--sans); letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
-  .big small { font:300 11px var(--mono); letter-spacing:.2em; color:var(--dim); margin-left:8px; vertical-align:middle; }
-  .verdict { margin-top:14px; font:300 13px/1.7 var(--sans); color:var(--dim); letter-spacing:.04em; min-height:46px; }
-  .verdict em { font-style:normal; color:var(--fg); }
-  .verdict .dn { color:var(--b); } .verdict .up { color:var(--a); }
-  .ctl .h { display:flex; justify-content:space-between; font:400 10px var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--dim); margin-bottom:12px; }
-  .ctl .h b { color:var(--fg); font-weight:300; }
-  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; outline:none; margin:0; cursor:pointer; }
-  input[type=range]::-webkit-slider-runnable-track { height:1px; background:linear-gradient(90deg,var(--faint) var(--s,0%),var(--fg) var(--s,0%),var(--fg) var(--e,0%),var(--faint) var(--e,0%)); }
-  input[type=range]::-moz-range-track { height:1px; background:linear-gradient(90deg,var(--faint) var(--s,0%),var(--fg) var(--s,0%),var(--fg) var(--e,0%),var(--faint) var(--e,0%)); }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; margin-top:-6px; border-radius:50%; background:var(--fg); border:0; box-shadow:0 0 0 5px #ffffff10; transition:box-shadow .2s; }
-  input[type=range]:hover::-webkit-slider-thumb { box-shadow:0 0 0 7px #ffffff18; }
-  input[type=range]::-moz-range-thumb { width:13px; height:13px; border-radius:50%; background:var(--fg); border:0; }
-  .tools { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
-  #status { min-height:14px; font:300 9px var(--mono); letter-spacing:.24em; color:var(--dim); text-transform:uppercase; }
+  /* pitch read-out */
+  .read { display:grid; grid-template-columns:170px 1fr; gap:14px; align-items:center; }
+  @media (max-width:420px) { .read { grid-template-columns:1fr; } }
+  .knob { position:relative; width:100%; aspect-ratio:1; }
+  .knob svg.k { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .ring { fill:none; stroke:#ffffff10; stroke-width:1; }
+  .tick { stroke:#7d80a6; stroke-width:1.3; stroke-linecap:round; }
+  .track { fill:none; stroke:#12142199; stroke-width:12; stroke-linecap:round; }
+  .arc { fill:none; stroke:var(--c); stroke-width:12; stroke-linecap:round; filter:drop-shadow(0 0 6px var(--glow)); transition:stroke-dasharray .5s cubic-bezier(.2,.8,.2,1); }
+  .dotg { transition:transform .5s cubic-bezier(.2,.8,.2,1); transform-origin:100px 100px; }
+  .dotg circle { fill:#2a2d45; stroke:var(--c); stroke-width:2; }
+  .cap { position:absolute; inset:23%; border-radius:50%; display:grid; place-content:center; text-align:center;
+    background:radial-gradient(circle at 35% 28%, #4e5272, #25283d 72%); box-shadow:0 12px 22px -6px #000b, 0 0 0 1px #ffffff12 inset, 0 -3px 8px #0008 inset, 0 3px 6px #ffffff20 inset; }
+  .note { font:400 clamp(20px,2.4vw,26px)/1 var(--display); color:#f3f4ff; }
+  .cents { margin-top:5px; font:500 11px var(--font); color:var(--dim); }
+  .info { min-width:0; display:flex; flex-direction:column; gap:10px; }
+  .hz { font:400 22px var(--display); letter-spacing:.04em; } .hz small { font:500 11px var(--font); color:var(--dim); margin-left:4px; }
+  .conf { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim); }
+  .bars { display:inline-flex; gap:2px; align-items:flex-end; height:12px; } .bars i { width:3px; background:#ffffff1f; border-radius:1px; }
+  .bars i:nth-child(1){height:5px} .bars i:nth-child(2){height:8px} .bars i:nth-child(3){height:12px}
+  .bars[data-l="1"] i:nth-child(-n+1), .bars[data-l="2"] i:nth-child(-n+2), .bars[data-l="3"] i { background:var(--c); box-shadow:0 0 5px var(--glow); }
+  .peaks { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:28px; }
+  .peaks .lbl { font-size:11px; color:var(--dim); display:flex; align-items:center; gap:5px; }
+  .peaks button { padding:5px 10px; font-size:11px; letter-spacing:.03em; }
+  .peaks button.sel { color:var(--c); box-shadow:0 0 10px var(--glow), 0 0 0 1px var(--c); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .actions button { padding:9px 14px; } .actions select { padding:9px 12px; }
+  .spec { height:56px; border-radius:12px; background:#12142455; box-shadow:0 2px 6px #0008 inset; }
+  .spec canvas { width:100%; height:100%; display:block; }
 
-  .strip { margin-top:52px; border-top:1px solid var(--hair); padding-top:26px; }
-  .strip svg { width:100%; height:64px; display:block; overflow:visible; }
-  .strip text { font:400 9px var(--mono); letter-spacing:.2em; fill:var(--dim); }
-  .strip .scale { stroke:var(--faint); stroke-width:1; }
-  .strip .st { stroke:var(--faint); }
-  .strip .gap { stroke:var(--fg); stroke-width:1.5; opacity:.7; transition:all .6s cubic-bezier(.2,.8,.2,1); }
-  .strip circle { transition:cx .6s cubic-bezier(.2,.8,.2,1); }
-
-  svg.i { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; flex:none; }
-  .ib { width:38px; height:38px; display:inline-grid; place-items:center; border-radius:50%; border:1px solid transparent; color:var(--dim); }
-  .ib:hover { color:var(--fg); border-color:var(--faint); }
-  .ib.on { color:var(--fg); border-color:#ffffff40; background:#ffffff0a; }
-  .ib.lg { width:64px; height:64px; background:var(--fg); color:#0a0a0b; border-color:var(--fg); }
-  .ib.lg:hover { background:#fff; box-shadow:0 0 34px #ffffff33; color:#000; }
-  .ib.lg svg.i { width:24px; height:24px; fill:currentColor; stroke-width:1; }
-  .ib.fill svg.i { fill:currentColor; stroke-width:1; }
-  .voice .head { display:flex; justify-content:center; }
-  .badge { width:30px; height:30px; border-radius:50%; border:1px solid var(--c); color:var(--c); display:grid; place-items:center; font:300 13px var(--mono); }
-  .voice.b .badge { box-shadow:0 0 12px #7ef0cf44; }
-  .conf { display:inline-flex; gap:2px; align-items:flex-end; height:10px; margin-right:8px; vertical-align:middle; }
-  .conf i { width:2px; background:var(--faint); border-radius:1px; } .conf i:nth-child(1){height:4px} .conf i:nth-child(2){height:7px} .conf i:nth-child(3){height:10px}
-  .conf[data-l="1"] i:nth-child(-n+1), .conf[data-l="2"] i:nth-child(-n+2), .conf[data-l="3"] i { background:var(--c); }
-  .fname { display:inline-block; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
-  .iconrow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .iconrow .lead { color:var(--dim); display:flex; align-items:center; gap:10px; } .iconrow b { font:300 12px var(--mono); color:var(--fg); letter-spacing:.1em; }
-  .verdict { display:flex; justify-content:center; align-items:center; gap:10px; font:300 16px var(--mono); letter-spacing:.12em; color:var(--fg); margin-top:16px; min-height:30px; }
-  .verdict .ar { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; border:1px solid currentColor; }
-  .verdict .ar svg.i { width:16px; height:16px; }
-  .verdict .dn { color:var(--b); } .verdict .up { color:var(--a); }
-  .verdict.empty { color:var(--faint); }
+  /* match column */
+  .match { display:flex; flex-direction:column; gap:14px; align-items:stretch; text-align:center; }
+  .match .step { justify-content:flex-start; }
+  .mknob { position:relative; width:min(270px,80%); aspect-ratio:1; margin:0 auto; }
+  .mknob svg.k { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .mknob .arc { stroke:#c9ccff; }
+  .mknob .dotg circle { stroke:#c9ccff; }
+  .mknob .cap { inset:21%; }
+  .big { font:400 clamp(24px,3vw,32px)/1 var(--display); color:#fff; }
+  .unit { margin-top:6px; font:600 10px var(--font); letter-spacing:.2em; color:var(--dim); text-transform:uppercase; }
+  .verdict { display:flex; justify-content:center; align-items:center; gap:10px; min-height:34px; font:600 15px var(--font); letter-spacing:.04em; }
+  .verdict .ar { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; color:var(--cyan); box-shadow:0 0 0 1px currentColor, 0 0 14px #4fe3f055; }
+  .verdict .ar.up { color:var(--orange); box-shadow:0 0 0 1px currentColor, 0 0 14px #ff8a1f55; }
+  .verdict .ar.ok { color:#6ff2a8; box-shadow:0 0 0 1px currentColor, 0 0 14px #6ff2a855; }
+  .verdict small { display:block; font:400 11px var(--font); color:var(--dim); letter-spacing:.02em; text-align:left; }
+  .verdict .hint { color:var(--dim); font:400 12px var(--font); }
+  .sl { text-align:left; }
+  .sl .h { display:flex; justify-content:space-between; align-items:center; font:600 10px var(--font); letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; }
+  .sl .h span.t { display:flex; gap:7px; align-items:center; } .sl .h b { color:var(--ink); font-weight:500; letter-spacing:.04em; font-size:12px; }
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:26px; background:transparent; margin:0; outline:none; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height:6px; border-radius:6px; box-shadow:0 1px 0 #ffffff18, 0 2px 4px #000a inset;
+    background:linear-gradient(90deg,#12142199 var(--s,0%),var(--orange) var(--s,0%),var(--orange) var(--e,0%),#12142199 var(--e,0%)); }
+  input[type=range]::-moz-range-track { height:6px; border-radius:6px; background:#12142199; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:28px; margin-top:-11px; border-radius:6px;
+    background:linear-gradient(90deg,#5a5e82,#2d3049 55%,#5a5e82); box-shadow:0 5px 8px #000a, 0 0 0 1px #0008, 0 1px 0 #ffffff33 inset; }
+  input[type=range]::-moz-range-thumb { width:15px; height:28px; border-radius:6px; border:0; background:#3d405f; }
+  .go { display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; }
+  .go .play { padding:13px 24px; font-size:12px; color:var(--orange); box-shadow:0 0 18px #ff8a1f44, 0 6px 12px -5px #000b, 0 0 0 1px #ff8a1f88; }
+  .go .play:hover { color:#ffb066; }
+  .drag { cursor:grab; width:100%; justify-content:center; border:1.5px dashed #ffffff30; background:#12142455; box-shadow:none; color:var(--dim); }
+  .drag:not([disabled]):hover { border-color:var(--cyan); color:var(--cyan); }
+  .drag.ready { color:var(--ink); border-style:solid; border-color:#ffffff30; }
   #status { height:6px; }
-  #status.busy::after { content:''; display:block; width:6px; height:6px; margin:auto; border-radius:50%; background:var(--b); animation:pulse .8s ease-in-out infinite alternate; }
+  #status.busy::after { content:''; display:block; width:6px; height:6px; margin:auto; border-radius:50%; background:var(--cyan); animation:pulse .8s ease-in-out infinite alternate; }
   @keyframes pulse { from { opacity:.2; } to { opacity:1; } }
-  select.oct { padding:4px 2px; width:44px; text-align:center; }
-  .ring-ico { color:var(--dim); } .ring-ico svg.i { width:34px; height:34px; stroke-width:1; }
-  .peaks button { font-size:10px; }
+  .tip { color:var(--dim); font-size:11px; text-align:center; margin-top:14px; }
 </style>
 </head>
-
 <body>
-<div class="wrap">
+<main class="plugin">
   <header>
-    <div class="brand">drum<i>/</i>pitch</div>
-    <div class="opts">
-      <select id="mode" hidden><option value="stretch">stretch</option><option value="vari">vari</option></select>
-      <button class="ib on" data-mode="stretch" title="Time-preserving: keeps the sample length"><svg class="i" viewBox="0 0 24 24"><path d="M4 6v12M20 6v12M4 12h16"/></svg></button>
-      <button class="ib" data-mode="vari" title="Varispeed: pitch and length change together"><svg class="i" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
-      <label class="ib" id="foldL" title="Fold octave: shift by at most 6 semitones"><input type="checkbox" id="fold" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg></label>
+    <div class="logo">Drum Pitch Match</div>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Shift mode">
+        <select id="mode" hidden><option value="stretch">stretch</option><option value="vari">vari</option></select>
+        <button class="on" data-mode="stretch" title="Keeps the sample length the same">
+          <svg class="i" viewBox="0 0 24 24"><path d="M4 6v12M20 6v12M4 12h16"/></svg>Keep length</button>
+        <button data-mode="vari" title="Pitch and length change together, like a sampler">
+          <svg class="i" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>Varispeed</button>
+      </div>
+      <label class="pill" id="foldL" title="Shift by at most 6 semitones, ignoring octave differences">
+        <input type="checkbox" id="fold"><svg class="i" viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg>Ignore octave</label>
     </div>
   </header>
 
   <div class="stage">
-    <section class="voice a">
-      <div class="head"><div class="badge">A</div></div>
-      <div class="ringbox drop" data-slot="A" title="Drop or click to load sample A">
-        <svg viewBox="0 0 200 200" data-knob="A">
-          <circle class="track" cx="100" cy="100" r="88" stroke-dasharray="415 600" transform="rotate(135 100 100)"/>
-          <circle class="arc" cx="100" cy="100" r="88" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
-          <g class="dot"><circle cx="100" cy="12" r="4.5"/></g>
-        </svg>
-        <div class="inner"><div class="note ring-ico" id="pA"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><div class="cents" id="cenA"></div></div>
+    <!-- 1: reference -->
+    <section class="card a" id="cardA">
+      <div class="step"><span class="n">1</span><b>Reference</b> sample to read pitch from</div>
+      <div class="zone drop" data-slot="A" tabindex="0" role="button" aria-label="Drop reference sample A, or press Enter to browse">
+        <canvas id="wA"></canvas>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg><b>Drop sample A here</b><span>or click to browse</span></div>
+        <div class="fn" id="sA"></div><div class="swap">Drop to replace</div>
       </div>
-      <div class="hz" id="hzA">&nbsp;</div>
-      <div class="meta"><span class="conf" id="confA" data-l="0"><i></i><i></i><i></i></span><span class="fname" id="sA"></span></div>
-      <div class="peaks" id="kA"></div>
-      <canvas id="cA"></canvas>
-      <div class="row"><button class="ib fill" id="playA" disabled title="Play"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="earA" disabled title="Check by ear: plays a tone at the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg></button><select class="oct" id="octA" title="Octaves down for ear check"><option value="0">0</option><option value="-12">&minus;1</option><option value="-24">&minus;2</option></select></div>
+      <div class="read">
+        <div class="knob">
+          <svg class="k" viewBox="0 0 200 200" data-knob="A"><circle class="ring" cx="100" cy="100" r="98"/><g class="ticks"></g>
+            <circle class="track" cx="100" cy="100" r="76" stroke-dasharray="358 600" transform="rotate(135 100 100)"/>
+            <circle class="arc" cx="100" cy="100" r="76" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
+            <g class="dotg"><circle cx="100" cy="24" r="6"/></g></svg>
+          <div class="cap"><div class="note" id="pA">&ndash;</div><div class="cents" id="cenA"></div></div>
+        </div>
+        <div class="info">
+          <div class="hz" id="hzA">&ndash;<small>Hz</small></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span></div>
+          <div class="peaks" id="kA"></div>
+        </div>
+      </div>
+      <div class="spec"><canvas id="cA"></canvas></div>
+      <div class="actions">
+        <button class="fill" id="playA" disabled title="Play A"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
+        <button id="earA" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>
+        <select id="octA" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">1 oct down</option><option value="-24">2 oct down</option></select>
+      </div>
     </section>
 
-    <section class="center">
-      <div>
-        <div class="big" id="shiftBig">&ndash;</div>
-        <div class="verdict empty" id="distance"></div>
-        <div id="shiftInfo" hidden></div>
+    <!-- 3: match -->
+    <section class="card m match">
+      <div class="step"><span class="n">3</span><b>Match</b> B to A</div>
+      <div class="mknob">
+        <svg class="k" viewBox="0 0 200 200"><circle class="ring" cx="100" cy="100" r="98"/><g class="ticks" id="mticks"></g>
+          <path class="track" id="mtrack" fill="none"/>
+          <path class="arc" id="marc" fill="none"/>
+          <g class="dotg" id="mdot"><circle cx="100" cy="24" r="6"/></g></svg>
+        <div class="cap"><div class="big" id="shiftBig">&ndash;</div><div class="unit">semitones</div></div>
       </div>
-      <div class="ctl"><div class="iconrow"><span class="lead" title="Fine tune"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg></span><b><span id="fineV">0</span>&cent;</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
-      <div class="ctl"><div class="iconrow"><span class="lead" title="Keep the original attack (ms)"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg></span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
-      <div class="tools"><button class="ib lg" id="playM" disabled title="Play matched B"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="dl" disabled title="Download WAV" style="align-self:center"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg></button></div>
+      <div class="verdict" id="distance"><span class="hint">Load both samples to match them</span></div>
+      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg>Fine tune</span><b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0"></div>
+      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Keep original attack</span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0"></div>
+      <div class="go">
+        <button class="play fill" id="playM" disabled><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play matched</button>
+        <button id="cmp" disabled title="Plays A, then your matched B"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4"/></svg>A / B</button>
+      </div>
       <div id="status"></div>
-    </section>
-
-    <section class="voice b">
-      <div class="head"><div class="badge">B</div></div>
-      <div class="ringbox drop" data-slot="B" title="Drop or click to load sample B">
-        <svg viewBox="0 0 200 200" data-knob="B">
-          <circle class="track" cx="100" cy="100" r="88" stroke-dasharray="415 600" transform="rotate(135 100 100)"/>
-          <circle class="arc" cx="100" cy="100" r="88" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
-          <g class="dot"><circle cx="100" cy="12" r="4.5"/></g>
-        </svg>
-        <div class="inner"><div class="note ring-ico" id="pB"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div><div class="cents" id="cenB"></div></div>
+      <div class="step" style="margin-top:2px"><span class="n" style="background:#c9ccff">4</span><b>Export</b></div>
+      <div class="go" style="flex-direction:column;align-items:stretch">
+        <button class="drag" id="dragOut" draggable="true" disabled title="Drag this into your DAW or a folder">
+          <svg class="i" viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01"/></svg><span id="dragT">Drag matched sample out</span></button>
+        <button id="dl" disabled><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>Download WAV</button>
       </div>
-      <div class="hz" id="hzB">&nbsp;</div>
-      <div class="meta"><span class="conf" id="confB" data-l="0"><i></i><i></i><i></i></span><span class="fname" id="sB"></span></div>
-      <div class="peaks" id="kB"></div>
-      <canvas id="cB"></canvas>
-      <div class="row"><button class="ib fill" id="playB" disabled title="Play"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button><button class="ib" id="earB" disabled title="Check by ear: plays a tone at the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg></button><select class="oct" id="octB" title="Octaves down for ear check"><option value="0">0</option><option value="-12">&minus;1</option><option value="-24">&minus;2</option></select></div>
+    </section>
+
+    <!-- 2: sample to retune -->
+    <section class="card b" id="cardB">
+      <div class="step"><span class="n">2</span><b>Sample to retune</b> gets matched to A</div>
+      <div class="zone drop" data-slot="B" tabindex="0" role="button" aria-label="Drop sample B to retune, or press Enter to browse">
+        <canvas id="wB"></canvas>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg><b>Drop sample B here</b><span>or click to browse</span></div>
+        <div class="fn" id="sB"></div><div class="swap">Drop to replace</div>
+      </div>
+      <div class="read">
+        <div class="knob">
+          <svg class="k" viewBox="0 0 200 200" data-knob="B"><circle class="ring" cx="100" cy="100" r="98"/><g class="ticks"></g>
+            <circle class="track" cx="100" cy="100" r="76" stroke-dasharray="358 600" transform="rotate(135 100 100)"/>
+            <circle class="arc" cx="100" cy="100" r="76" stroke-dasharray="0 600" transform="rotate(135 100 100)"/>
+            <g class="dotg"><circle cx="100" cy="24" r="6"/></g></svg>
+          <div class="cap"><div class="note" id="pB">&ndash;</div><div class="cents" id="cenB"></div></div>
+        </div>
+        <div class="info">
+          <div class="hz" id="hzB">&ndash;<small>Hz</small></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span></div>
+          <div class="peaks" id="kB"></div>
+        </div>
+      </div>
+      <div class="spec"><canvas id="cB"></canvas></div>
+      <div class="actions">
+        <button class="fill" id="playB" disabled title="Play B"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
+        <button id="earB" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>
+        <select id="octB" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">1 oct down</option><option value="-24">2 oct down</option></select>
+      </div>
     </section>
   </div>
-
-  <div class="strip">
-    <svg viewBox="0 0 1000 64" id="stripSvg">
-      <g id="stripTicks"></g>
-      <line class="scale" x1="0" y1="34" x2="1000" y2="34"/>
-      <line class="gap" id="stripGap" x1="0" y1="34" x2="0" y2="34"/>
-      <circle id="stripA" cx="0" cy="34" r="5" fill="#f4f4f5"/>
-      <circle id="stripB" cx="0" cy="34" r="5" fill="#7ef0cf" style="filter:drop-shadow(0 0 5px #7ef0cf99)"/>
-      <text id="stripAT" x="0" y="18" text-anchor="middle">A</text>
-      <text id="stripBT" x="0" y="18" text-anchor="middle">B</text>
-    </svg>
-  </div>
+  <div class="tip">Tip: drop two files anywhere on the window at once. The first becomes A, the second B.</div>
   <input type="file" id="file" accept="audio/*" hidden>
-</div>
+</main>
 <script type="module" src="./app.js"></script>
 </body>
 </html>

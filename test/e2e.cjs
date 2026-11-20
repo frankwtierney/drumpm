@@ -31,7 +31,7 @@ const path = require('node:path');
     const m = await import('/src/detect.js');
     const { A, B, matched } = window.__state;
     const out = m.detectPitch(matched.channels, matched.sr);
-    return { hzA: A.hz, hzB: B.hz, hzOut: out.hz, lenB: B.channels[0].length, lenOut: matched.channels[0].length, info: document.getElementById('shiftInfo').textContent,
+    return { hzA: A.hz, hzB: B.hz, hzOut: out.hz, lenB: B.channels[0].length, lenOut: matched.channels[0].length, info: document.getElementById('shiftBig').textContent,
       peak: Math.max(...matched.channels[0].map(Math.abs)) };
   });
   console.log(JSON.stringify(res, null, 1));

@@ -44,7 +44,7 @@
   .fill svg.i { fill:currentColor; stroke-width:1; }
 
   /* workflow layout */
-  .stage { display:grid; grid-template-columns:1fr 340px 1fr; gap:22px; margin-top:20px; align-items:stretch; }
+  .stage { display:grid; grid-template-columns:minmax(0,1fr) minmax(380px,1.4fr) minmax(0,1fr); gap:22px; margin-top:20px; align-items:stretch; }
   @media (max-width:1040px) { .stage { grid-template-columns:1fr 1fr; } .match { grid-column:1 / -1; order:3; } }
   @media (max-width:640px) { .stage { grid-template-columns:1fr; } }
   .card { background:linear-gradient(180deg,#ffffff0b,#ffffff04); border:1px solid var(--faint); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:14px; }
@@ -189,6 +189,26 @@
   .tn-needle::before { top:-4px; border-width:4px; border-top-width:5px; margin-left:-4px; }
   .tn-note { margin-top:3px; min-height:0; font-size:10px; line-height:1.3; }
   .tn-note:empty { display:none; }
+
+  /* hierarchy: the match column leads, the sample columns support it */
+  .stage { align-items:start; }
+  .card.m { background:linear-gradient(180deg,#c9ccff14,#c9ccff06); border-color:#c9ccff40; box-shadow:0 0 0 1px #c9ccff14 inset, 0 18px 50px -18px #6e72c8aa; }
+  .card:not(.m) .read { grid-template-columns:128px 1fr; }
+  .card:not(.m) .zone { height:128px; }
+  .card:not(.m) .note { font-size:clamp(15px,1.5vw,19px); }
+  .card:not(.m) .cents { font-size:10px; }
+  .card:not(.m) .hz { font-size:19px; }
+  .card.m .zone { height:176px; }
+  .card.m .read { grid-template-columns:minmax(190px,0.9fr) 1fr; gap:18px; }
+  .card.m .big { font-size:clamp(26px,2.8vw,36px); }
+  .card.m .cents { font-size:11px; letter-spacing:.14em; text-transform:uppercase; }
+  .card.m .verdict { font-size:15px; }
+  .card.m .step { color:#c9ccffcc; } .card.m .step b { color:#fff; }
+
+  .card.m .cap { inset:19%; } .card.m .big { font-size:clamp(22px,2.2vw,28px); }
+  .card:not(.m) .actions { gap:6px; flex-wrap:nowrap; }
+  .card:not(.m) .actions button, .card:not(.m) .actions select { padding:8px 11px; font-size:10px; }
+  .card:not(.m) .step { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -213,7 +233,7 @@
   <div class="stage">
     <!-- 1: reference -->
     <section class="card a" id="cardA">
-      <div class="step"><span class="n">1</span><b>Reference</b> sample to read pitch from</div>
+      <div class="step"><span class="n">1</span><b>Reference</b></div>
       <div class="zone drop" data-slot="A" tabindex="0" role="button" aria-label="Drop reference sample A, or press Enter to browse">
         <canvas id="wA"></canvas>
         <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg><b>Drop sample A here</b><span>or click to browse</span></div>
@@ -239,7 +259,7 @@
       <div class="actions">
         <button class="fill" id="playA" disabled title="Play A"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
         <button id="earA" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>
-        <select id="octA" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">1 oct down</option><option value="-24">2 oct down</option></select>
+        <select id="octA" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">&minus;1 oct</option><option value="-24">&minus;2 oct</option></select>
       </div>
     </section>
 
@@ -280,7 +300,7 @@
 
     <!-- 2: sample to retune -->
     <section class="card b" id="cardB">
-      <div class="step"><span class="n">2</span><b>Sample to retune</b> gets matched to A</div>
+      <div class="step"><span class="n">2</span><b>To retune</b></div>
       <div class="zone drop" data-slot="B" tabindex="0" role="button" aria-label="Drop sample B to retune, or press Enter to browse">
         <canvas id="wB"></canvas>
         <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg><b>Drop sample B here</b><span>or click to browse</span></div>
@@ -306,7 +326,7 @@
       <div class="actions">
         <button class="fill" id="playB" disabled title="Play B"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
         <button id="earB" disabled title="Plays your sample with a tone at the detected pitch so you can check it by ear"><svg class="i" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 1 1 12 0c0 3.2-3.2 3.8-3.2 6.7a2.8 2.8 0 0 1-5.6 0"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0"/></svg>Check by ear</button>
-        <select id="octB" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">1 oct down</option><option value="-24">2 oct down</option></select>
+        <select id="octB" title="Play the ear check lower, where the ring is easier to hear"><option value="0">Normal</option><option value="-12">&minus;1 oct</option><option value="-24">&minus;2 oct</option></select>
       </div>
     </section>
   </div>

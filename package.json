@@ -1,5 +1,5 @@
 {
-  "name": "drumpm",
+  "name": "drum-clone",
   "version": "0.1.0",
   "description": "Detect the pitch of a drum sample and match another sample to it",
   "type": "module",

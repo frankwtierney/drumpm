@@ -53,3 +53,18 @@ export function encodeWav(channels, sr) {
   }
   return new Blob([buf], { type: 'audio/wav' });
 }
+
+/** Minimal store-only ZIP with a single file. Used where only archive downloads are allowed. */
+export function zipStore(name, bytes) {
+  const enc = new TextEncoder().encode(name), n = bytes.length;
+  const table = zipStore.t || (zipStore.t = Array.from({ length: 256 }, (_, i) => { let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
+  let crc = 0xffffffff; for (let i = 0; i < n; i++) crc = table[(crc ^ bytes[i]) & 255] ^ (crc >>> 8); crc = (crc ^ 0xffffffff) >>> 0;
+  const out = new Uint8Array(30 + enc.length + n + 46 + enc.length + 22), v = new DataView(out.buffer);
+  let o = 0; const u16 = (x) => { v.setUint16(o, x, true); o += 2; }, u32 = (x) => { v.setUint32(o, x, true); o += 4; };
+  u32(0x04034b50); u16(20); u16(0x0800); u16(0); u16(0); u16(0x21); u32(crc); u32(n); u32(n); u16(enc.length); u16(0); out.set(enc, o); o += enc.length; out.set(bytes, o); o += n;
+  const cd = o;
+  u32(0x02014b50); u16(20); u16(20); u16(0x0800); u16(0); u16(0); u16(0x21); u32(crc); u32(n); u32(n); u16(enc.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0); out.set(enc, o); o += enc.length;
+  const cdLen = o - cd;
+  u32(0x06054b50); u16(0); u16(0); u16(1); u16(1); u32(cdLen); u32(cd); u16(0);
+  return out;
+}

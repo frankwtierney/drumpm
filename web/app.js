@@ -1,5 +1,5 @@
 import { detectPitch, matchSemitones, describeHz, spectrum, toMono, findOnset } from '../src/detect.js';
-import { stretchShift, varispeed, keepTransient, encodeWav } from './shift.js';
+import { stretchShift, varispeed, keepTransient, encodeWav, zipStore } from './shift.js';
 
 const $ = (id) => document.getElementById(id);
 const ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -249,9 +249,14 @@ async function renderAudio() {
   const { A, B } = state;
   if (!A?.hz || !B?.hz) return;
   const st = totalShift(), token = ++renderToken;
-  let out;
-  if ($('mode').value === 'stretch') out = await stretchShift(B.channels, B.sr, st);
-  else out = B.channels.map((c) => varispeed(c, st));
+  let out, fell = false;
+  if ($('mode').value === 'stretch') {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('stretch engine timed out')), 8000));
+      out = await Promise.race([stretchShift(B.channels, B.sr, st), timeout]);
+      if (!out[0].some((v) => Math.abs(v) > 1e-6)) throw new Error('stretch engine returned silence');
+    } catch (e) { console.warn(e); fell = true; out = B.channels.map((c) => varispeed(c, st)); }
+  } else out = B.channels.map((c) => varispeed(c, st));
   const atk = Number($('atk').value);
   if (atk) out = out.map((c, i) => keepTransient(B.channels[i], c, B.sr, atk));
   if (token !== renderToken) return;
@@ -259,7 +264,7 @@ async function renderAudio() {
   const blob = encodeWav(out, B.sr);
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
   const m = detectPitch(out, B.sr);
-  $('tnNote').textContent = m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '';
+  $('tnNote').textContent = (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '');
   $('playM').disabled = $('cmp').disabled = $('dragOut').disabled = false;
   $('dragOut').classList.add('ready');
   $('status').classList.remove('busy');
@@ -313,7 +318,15 @@ $('earA').onclick = () => earCheck('A');
 $('earB').onclick = () => earCheck('B');
 
 /* ---------- export ---------- */
-$('dragOut').onclick = () => { const a = document.createElement('a'); a.href = state.matched.url; a.download = state.matched.name; a.click(); };
+$('dragOut').onclick = async () => {
+  const m = state.matched; if (!m) return;
+  // Inside the Artifact viewer, direct downloads are blocked: use its downloads capability (it accepts .zip, not .wav).
+  try {
+    const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+    if (dl) { await dl.save({ filename: m.name.replace(/\.wav$/, '.zip'), data: zipStore(m.name, new Uint8Array(await m.blob.arrayBuffer())) }); return; }
+  } catch (e) { if (e?.code === 'declined') return; console.warn(e); }
+  const a = document.createElement('a'); a.href = m.url; a.download = m.name; a.click();
+};
 $('dragOut').addEventListener('dragstart', (e) => {
   if (!state.matched) return e.preventDefault();
   e.dataTransfer.effectAllowed = 'copy';

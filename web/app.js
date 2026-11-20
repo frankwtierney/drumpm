@@ -1,10 +1,11 @@
 import { detectPitch, matchSemitones, describeHz, spectrum, toMono, findOnset } from '../src/detect.js';
 import { analyzeAttack, applyAttackContour } from '../src/attack.js';
+import { SCALES, ROOTS, ROLES, suggestTunings, guessRole } from '../src/key.js';
 import { stretchShift, varispeed, keepTransient, encodeWav, zipStore } from './shift.js';
 
 const $ = (id) => document.getElementById(id);
 const ac = new (window.AudioContext || window.webkitAudioContext)();
-const state = { A: null, B: null, matched: null };
+const state = { A: null, B: null, matched: null, target: null };
 const NS = 'http://www.w3.org/2000/svg';
 const ICON = {
   up: '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
@@ -12,6 +13,8 @@ const ICON = {
   ok: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
 };
 let pendingSlot = null;
+const refHz = () => state.target?.hz ?? state.A?.hz;          // what B is matched to: a chosen key target, else sample A
+const refName = () => (state.target ? state.target.name : 'A');
 
 /* ---------- loading ---------- */
 async function loadFile(slot, file) {
@@ -22,6 +25,8 @@ async function loadFile(slot, file) {
     const det = detectPitch(channels, buf.sampleRate);
     state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz };
     manual = null;
+    if (slot === 'A') state.target = null;                                           // a new reference sample means "match to A" again
+    if (slot === 'B' && det.hz && !key.roleTouched) $('keyRole').value = guessRole(det.hz);
     render(slot);
     await update();
   } catch (e) {
@@ -51,6 +56,7 @@ function showPitch(slot) {
   }
   setKnob(slot, d.hz);
   ['A', 'B'].forEach((k2) => state[k2] && drawSpectrum(k2));
+  if (slot === 'B') renderKey();
 }
 
 // Choose a different detected pitch (candidate chips). The light parts update at once;
@@ -178,8 +184,8 @@ function drawSpectrum(slot, live = null, tag = '') {
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, ph); g.stroke(); g.setLineDash([]);
     g.textAlign = x > w - 20 * dpr ? 'right' : 'left'; g.font = `600 ${10 * dpr}px Inter, sans-serif`; g.fillText(label, x + (g.textAlign === 'left' ? 4 : -4) * dpr, 11 * dpr); g.restore();
   };
-  if (tag === 'matched') line(state.A?.hz, '#ff8a1f', 'A');          // matched B should land on A
-  else { line(s.hz, '#ffffffcc', slot); if (slot === 'B') line(state.A?.hz, '#ff8a1f', 'A'); }
+  if (tag === 'matched') line(refHz(), '#ff8a1f', refName());          // matched B should land on the target
+  else { line(s.hz, '#ffffffcc', slot); if (slot === 'B') line(refHz(), '#ff8a1f', refName()); }
 }
 
 let analyser = null, fftBuf = null;
@@ -284,7 +290,7 @@ function setMatch(st) { // bipolar dial: -12..+12 st, 0 at 12 o'clock
 setMatch(null); setKnob('A', null); setKnob('B', null); setTuner(null);
 
 /* ---------- matching ---------- */
-function shiftAmount0() { return matchSemitones(state.A.hz, state.B.hz, { foldOctave: $('fold').checked }); }
+function shiftAmount0() { return matchSemitones(refHz(), state.B.hz, { foldOctave: $('fold').checked }); }
 function styleRanges() {
   const set = (id, s, e) => { $(id).style.setProperty('--s', s + '%'); $(id).style.setProperty('--e', e + '%'); };
   const pf = ((Number($('fine').value) + 100) / 200) * 100; set('fine', Math.min(50, pf), Math.max(50, pf));
@@ -309,14 +315,15 @@ function setManual(v) { manual = v; update(150); }
 
 async function update(delay = 0) {
   $('fineV').textContent = $('fine').value; $('atkV').textContent = $('atk').value; styleRanges();
-  const { A, B } = state, ready = !!(A?.hz && B?.hz);
+  const { A, B } = state, ready = !!(refHz() && B?.hz), nm = refName();
+  $('matchRef').textContent = `B to ${nm}`;
   $('mknob').classList.toggle('live', ready);
   $('autoBtn').hidden = !ready;
   $('autoBtn').classList.toggle('on', manual === null);
   $('autoT').textContent = manual === null ? 'Auto' : 'Manual \u00b7 reset';
   if (!ready) {
     $('shiftBig').textContent = '\u2013'; setMatch(null); setTuner(null); $('tnNote').textContent = '';
-    $('distance').innerHTML = `<span class="hint">${!A && !B ? 'Drop a reference (1) and a sample to retune (2)' : !A ? 'Now drop the reference sample (1)' : 'Now drop the sample to retune (2)'}</span>`;
+    $('distance').innerHTML = `<span class="hint">${!refHz() && !B ? 'Drop a reference (1) and a sample to retune (2), or pick a key below' : !refHz() ? 'Now drop the reference sample (1), or pick a key below' : 'Now drop the sample to retune (2)'}</span>`;
     $('playM').disabled = $('cmp').disabled = true; setExport(false); return;
   }
   const base = shiftAmount0(), st = totalShift();
@@ -325,8 +332,9 @@ async function update(delay = 0) {
   $('shiftBig').textContent = (st >= 0 ? '+' : '\u2212') + Math.abs(st).toFixed(2);
   setMatch(st); setTuner(st - base);
   $('distance').innerHTML = dist < 0.005
-    ? `<span class="ar ok">${ICON.ok}</span><span>B is already in tune with A</span>`
-    : `<span class="ar ${base < 0 ? 'dn' : 'up'}">${base < 0 ? ICON.dn : ICON.up}</span><span>B is ${w2} st ${c2}\u00a2 ${base < 0 ? 'above' : 'below'} A<small>Needs a shift ${base < 0 ? 'down' : 'up'} of ${Math.abs(base).toFixed(2)} st</small></span>`;
+    ? `<span class="ar ok">${ICON.ok}</span><span>B is already in tune with ${nm}</span>`
+    : `<span class="ar ${base < 0 ? 'dn' : 'up'}">${base < 0 ? ICON.dn : ICON.up}</span><span>B is ${w2} st ${c2}\u00a2 ${base < 0 ? 'above' : 'below'} ${nm}<small>Needs a shift ${base < 0 ? 'down' : 'up'} of ${Math.abs(base).toFixed(2)} st</small></span>`;
+  $('cmp').disabled = !A;
   $('status').classList.add('busy');
   clearTimeout(renderTimer);
   renderTimer = setTimeout(renderAudio, delay);
@@ -334,7 +342,7 @@ async function update(delay = 0) {
 
 async function renderAudio() {
   const { A, B } = state;
-  if (!A?.hz || !B?.hz) return;
+  if (!refHz() || !B?.hz) return;
   const st = totalShift(), token = ++renderToken;
   let out, fell = false;
   if ($('mode').value === 'stretch') {
@@ -345,7 +353,7 @@ async function renderAudio() {
     } catch (e) { console.warn(e); fell = true; out = B.channels.map((c) => varispeed(c, st)); }
   } else out = B.channels.map((c) => varispeed(c, st));
   const wantAtk = $('matchAtk').checked && $('mode').value === 'stretch' && !fell;
-  const canAtk = wantAtk && A.attack && B.attack && (A.attack.hasSweep || B.attack.hasSweep);
+  const canAtk = wantAtk && A?.attack && B.attack && (A.attack.hasSweep || B.attack.hasSweep);
   if (canAtk) out = out.map((c, i) => applyAttackContour(B.channels[i], c, B.sr, { attackA: A.attack, attackB: B.attack, bodyShiftSemis: st }));
   const atk = canAtk ? 0 : Number($('atk').value);
   if (atk) out = out.map((c, i) => keepTransient(B.channels[i], c, B.sr, atk));
@@ -354,8 +362,8 @@ async function renderAudio() {
   const blob = encodeWav(out, B.sr);
   state.matched = { channels: out, sr: B.sr, blob, url: URL.createObjectURL(blob), name: B.name.replace(/\.[^.]+$/, '') + '_matched.wav' };
   const m = detectPitch(out, B.sr);
-  $('tnNote').textContent = (wantAtk && !canAtk ? 'Match attack is on, but neither sample has a pitch sweep. ' : '') + (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (A is ${A.hz.toFixed(1)} Hz)` : '');
-  $('playM').disabled = $('cmp').disabled = false;
+  $('tnNote').textContent = (wantAtk && !canAtk ? 'Match attack is on, but neither sample has a pitch sweep. ' : '') + (fell ? 'The keep-length engine could not run here, so this used varispeed. ' : '') + (m.hz ? `Rendered output measures ${m.hz.toFixed(1)} Hz (${refName() === 'A' ? 'A is' : 'target is'} ${refHz().toFixed(1)} Hz)` : '');
+  $('playM').disabled = false; $('cmp').disabled = !A;
   setExport(true); $('sM').textContent = state.matched.name; drawMatched();
   $('status').classList.remove('busy');
   window.__renderDone = (window.__renderDone || 0) + 1;
@@ -373,7 +381,7 @@ const KEYDIR = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
 
 // Match dial: the total shift in semitones (-12..+12), including the fine trim.
 (() => {
-  const mk = $('mknob'), ready = () => !!(state.A?.hz && state.B?.hz);
+  const mk = $('mknob'), ready = () => !!(refHz() && state.B?.hz);
   dialDrag(mk, ready, (deg) => setManual(Math.round(((deg / 135) * 12 - Number($('fine').value) / 100) * 100) / 100));
   mk.addEventListener('dblclick', () => { if (ready()) setManual(null); });
   mk.addEventListener('keydown', (e) => {
@@ -516,7 +524,7 @@ function onWheel(el, apply) {
     if (steps) apply(steps, e);
   }, { passive: false });
 }
-onWheel($('mknob'), (n, e) => { if (state.A?.hz && state.B?.hz) setManual(Math.round(Math.max(-12, Math.min(12, (manual ?? shiftAmount0()) + n * (e.shiftKey ? 1 : e.altKey ? 0.01 : 0.1))) * 100) / 100); });
+onWheel($('mknob'), (n, e) => { if (refHz() && state.B?.hz) setManual(Math.round(Math.max(-12, Math.min(12, (manual ?? shiftAmount0()) + n * (e.shiftKey ? 1 : e.altKey ? 0.01 : 0.1))) * 100) / 100); });
 for (const [id, step, big] of [['fine', 1, 10], ['atk', 1, 5]]) {
   onWheel($(id), (n, e) => {
     const el = $(id); if (el.disabled) return;
@@ -524,3 +532,38 @@ for (const [id, step, big] of [['fine', 1, 10], ['atk', 1, 5]]) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
+
+/* ---------- key suggestions: which notes can B be tuned to, for this key and drum? ---------- */
+const key = { roleTouched: false };
+(() => {
+  $('keyRoot').innerHTML = '<option value="">Choose\u2026</option>' + ROOTS.map((r, i) => `<option value="${i}">${r}</option>`).join('');
+  $('keyScale').innerHTML = Object.entries(SCALES).map(([k, v]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${v.label}</option>`).join('');
+  $('keyRole').innerHTML = Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === 'snare' ? ' selected' : ''}>${v.label}</option>`).join('');
+  $('keyRole').addEventListener('change', () => { key.roleTouched = true; });
+  for (const id of ['keyRoot', 'keyScale', 'keyRole']) $(id).addEventListener('change', () => renderKey());
+  $('ktX').onclick = () => { state.target = null; manual = null; update(); renderKey(); };
+})();
+
+function renderKey() {
+  const B = state.B, root = $('keyRoot').value, cfg = { rootPc: root === '' ? null : Number(root), scale: $('keyScale').value, role: $('keyRole').value };
+  const tgt = state.target, box = $('keyCands'), note = $('keyNote');
+  $('keyStat').textContent = tgt ? `Target ${tgt.name}` : cfg.rootPc == null ? 'Off' : `${ROOTS[cfg.rootPc].split('/')[0]} ${SCALES[cfg.scale].label.toLowerCase()} \u00b7 ${ROLES[cfg.role].label}`;
+  $('keyTarget').hidden = !tgt;
+  if (tgt) $('ktT').textContent = `Matching B to ${tgt.name} (${tgt.hz.toFixed(1)} Hz), not sample A`;
+  box.textContent = '';
+  if (cfg.rootPc == null) { note.textContent = 'Pick a key to see which notes B can be tuned to.'; return; }
+  if (!B?.hz) { note.textContent = 'Drop sample B to see which notes it can be tuned to.'; return; }
+  const list = suggestTunings(B.hz, cfg), r = ROLES[cfg.role];
+  note.textContent = list.length
+    ? `Best fits for a ${r.label.toLowerCase()} in this key, ranked by how well they suit the drum and how little B has to move. Typical range ${r.sweet[0]}\u2013${r.sweet[1]} Hz. Click one, then use Loop to hear it. Treat these as suggestions.`
+    : 'No notes in this key fall inside that drum\u2019s range within 12 semitones of B.';
+  for (const c of list) {
+    const b = document.createElement('button'); b.className = 'cand' + (tgt && Math.abs(tgt.hz - c.hz) < 0.01 ? ' sel' : '');
+    const good = ['root', '5th', '3rd', '\u266D3rd'].includes(c.interval);
+    b.innerHTML = `<span class="cn">${c.note}</span><span class="cd${good ? ' good' : ''}">${c.interval}</span><span class="cs">${c.shift >= 0 ? '+' : '\u2212'}${Math.abs(c.shift).toFixed(2)} st</span><span class="cf">${c.hz.toFixed(1)} Hz${c.inSweet ? '' : ' \u00b7 edge of range'}${c.bigShift ? ' \u00b7 big shift' : ''}</span>`;
+    b.title = `${c.note}, the ${c.interval} of the key. ${c.shift >= 0 ? 'Shifts B up' : 'Shifts B down'} ${Math.abs(c.shift).toFixed(2)} semitones.`;
+    b.onclick = () => { state.target = { hz: c.hz, name: c.note }; manual = null; update(); renderKey(); };
+    box.appendChild(b);
+  }
+}
+renderKey();

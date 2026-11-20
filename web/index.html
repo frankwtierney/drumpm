@@ -227,6 +227,29 @@
   .match .actions > #playM { flex-grow:1.35; }
   .match .actions { flex-wrap:nowrap; }
   #status { position:absolute; right:18px; bottom:7px; margin:0; }
+
+  /* key suggestions */
+  .keybar { margin-top:22px; padding:0; gap:0; }
+  .keybar summary { list-style:none; display:flex; align-items:center; gap:14px; padding:14px 18px; cursor:pointer; user-select:none; }
+  .keybar summary::-webkit-details-marker { display:none; }
+  .keybar .ks { display:flex; align-items:center; gap:10px; font:600 11px var(--font); letter-spacing:.16em; text-transform:uppercase; color:#fff; }
+  .keybar .kstat { margin-left:auto; font-size:12px; color:var(--dim); }
+  .keybar .chev { color:var(--dim); transition:transform .2s; } .keybar[open] .chev { transform:rotate(180deg); }
+  .keybody { padding:0 18px 18px; }
+  .keyrow { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+  .keyrow label { display:grid; gap:5px; font:600 10px var(--font); letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+  .keyrow select { min-width:120px; padding:9px 14px; }
+  .ktarget { margin-left:auto; display:flex; align-items:center; gap:8px; padding:6px 6px 6px 14px; border-radius:999px; background:#c9ccff1a; box-shadow:0 0 0 1px #c9ccff55; font:600 12px var(--font); color:#e9eaff; }
+  .ktarget button { padding:5px 7px; border-radius:50%; box-shadow:none; background:#ffffff14; } .ktarget svg.i { width:13px; height:13px; }
+  .keynote { margin:12px 0 0; font-size:12px; color:var(--dim); }
+  .cands { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:10px; margin-top:12px; }
+  .cand { flex-direction:column; align-items:flex-start; gap:3px; padding:11px 13px; border-radius:14px; text-transform:none; letter-spacing:.02em; text-align:left; }
+  .cand .cn { font:400 20px var(--display); color:#fff; }
+  .cand .cd { font:600 10px var(--font); letter-spacing:.12em; text-transform:uppercase; padding:2px 8px; border-radius:999px; background:#ffffff14; color:var(--dim); }
+  .cand .cd.good { color:#6ff2a8; background:#6ff2a81a; }
+  .cand .cs { font:500 12px var(--font); color:var(--ink); }
+  .cand .cf { font:400 11px var(--font); color:var(--dim); }
+  .cand.sel { box-shadow:0 0 14px #c9ccff44, 0 0 0 1px #c9ccff; }
 </style>
 </head>
 <body>
@@ -283,7 +306,7 @@
 
     <!-- 3: match (same structure as the two sample cards: box, dial + readout, controls) -->
     <section class="card m match">
-      <div class="step"><span class="n">3</span><b>Match</b> B to A<button class="mini on" id="autoBtn" hidden title="Auto uses the detected pitches. Drag, scroll or use the arrow keys on the dial to set the shift by hand; click here to go back to auto."><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg><span id="autoT">Auto</span></button></div>
+      <div class="step"><span class="n">3</span><b>Match</b> <span id="matchRef">B to A</span><button class="mini on" id="autoBtn" hidden title="Auto uses the detected pitches. Drag, scroll or use the arrow keys on the dial to set the shift by hand; click here to go back to auto."><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg><span id="autoT">Auto</span></button></div>
       <div class="zone out" id="dragOut" draggable="true" role="button" tabindex="0" aria-disabled="true" title="Drag the matched sample into your DAW or a folder, or click to save it as a WAV">
         <canvas id="wM"></canvas>
         <div class="empty"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg><b>Matched sample</b><span>appears here once A and B are loaded</span></div>
@@ -349,6 +372,20 @@
       </div>
     </section>
   </div>
+
+  <details class="card keybar" id="keybar">
+    <summary><span class="ks"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Tune to a song key</span><span class="kstat" id="keyStat">Off</span><svg class="i chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></summary>
+    <div class="keybody">
+      <div class="keyrow">
+        <label>Key<select id="keyRoot" title="The song's key"></select></label>
+        <label>Scale<select id="keyScale"></select></label>
+        <label>Tune B as<select id="keyRole" title="Sets the range and which scale notes suit the drum. Chosen from B's pitch when it loads."></select></label>
+        <div class="ktarget" id="keyTarget" hidden><span id="ktT"></span><button id="ktX" title="Go back to matching sample A"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      </div>
+      <div class="keynote" id="keyNote">Pick a key to see which notes B can be tuned to.</div>
+      <div class="cands" id="keyCands"></div>
+    </div>
+  </details>
   <div class="tip">Tip: drop two files anywhere on the window at once. The first becomes A, the second B.</div>
   <input type="file" id="file" accept="audio/*" hidden>
 </main>

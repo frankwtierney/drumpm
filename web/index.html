@@ -191,7 +191,6 @@
   .tn-note:empty { display:none; }
 
   /* hierarchy: the match column leads, the sample columns support it */
-  .stage { align-items:start; }
   .card.m { background:linear-gradient(180deg,#c9ccff14,#c9ccff06); border-color:#c9ccff40; box-shadow:0 0 0 1px #c9ccff14 inset, 0 18px 50px -18px #6e72c8aa; }
   .card:not(.m) .read { grid-template-columns:128px 1fr; }
   .card:not(.m) .zone { height:128px; }
@@ -209,6 +208,18 @@
   .card:not(.m) .actions { gap:6px; flex-wrap:nowrap; }
   .card:not(.m) .actions button, .card:not(.m) .actions select { padding:8px 11px; font-size:10px; }
   .card:not(.m) .step { white-space:nowrap; }
+
+  /* sliders now sit beside the semitone dial */
+  .match .info { gap:14px; }
+  .match .info .sl .h { margin-bottom:4px; } .match .info .sl .h .t { gap:6px; }
+  .conf .mini { margin-left:auto; padding:3px 7px; border-radius:999px; } .conf .mini svg.i { width:13px; height:13px; }
+  .knob.live { cursor:grab; touch-action:none; } .knob.live:active { cursor:grabbing; } .knob:focus-visible { outline:1px dashed var(--c, #c9ccff); outline-offset:5px; border-radius:50%; }
+  /* the match column is the tallest; the sample columns sit a touch shorter */
+  .stage { align-items:stretch; }
+  .card:not(.m) { margin-bottom:44px; }
+  .card:not(.m) .spec { flex:1; height:auto; min-height:112px; }
+  .spec canvas { position:absolute; inset:0; width:100%; height:100%; }
+  @media (max-width:1040px) { .card:not(.m) { margin-bottom:0; } .card:not(.m) .spec { flex:none; height:112px; } }
 </style>
 </head>
 <body>
@@ -249,7 +260,7 @@
         </div>
         <div class="info">
           <div class="hz" id="hzA">&ndash;<small>Hz</small></div>
-          <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confA" data-l="0"><i></i><i></i><i></i></span><span id="confTA">No sample</span><button class="mini" id="rstA" hidden title="Restore the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 1 1 0 10H8M4 9l4-4M4 9l4 4"/></svg></button></div>
           <div class="atk" id="atkA" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kA"></div>
         </div>
@@ -282,6 +293,8 @@
         </div>
         <div class="info">
           <div class="verdict" id="distance"><span class="hint">Load both samples to match them</span></div>
+        <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg>Fine tune</span><b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
+        <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Keep original attack</span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
         </div>
       </div>
       <div class="tuner" id="tuner" data-s="none" title="How far B, after shifting, is from A's pitch">
@@ -289,8 +302,6 @@
         <div class="tn-bar"><div class="tn-ticks"></div><div class="tn-zone"></div><div class="tn-needle" id="tnNeedle"></div></div>
         <div class="tn-note" id="tnNote"></div>
       </div>
-      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v8M8 9h8M8 18h8"/></svg>Fine tune</span><b><span id="fineV">0</span> cents</b></div><input type="range" id="fine" min="-100" max="100" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
-      <div class="sl"><div class="h"><span class="t"><svg class="i" viewBox="0 0 24 24"><path d="M2 12h4l2-7 3 14 2-10 2 3h7"/></svg>Keep original attack</span><b><span id="atkV">0</span> ms</b></div><input type="range" id="atk" min="0" max="40" value="0" title="Scroll to adjust. Shift = bigger steps."></div>
       <div class="actions">
         <button class="play fill" id="playM" disabled><svg class="i" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play matched</button>
         <button id="cmp" disabled title="Plays A, then your matched B"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4"/></svg>A / B</button>
@@ -316,7 +327,7 @@
         </div>
         <div class="info">
           <div class="hz" id="hzB">&ndash;<small>Hz</small></div>
-          <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span></div>
+          <div class="conf" title="How sure the detector is"><span class="bars" id="confB" data-l="0"><i></i><i></i><i></i></span><span id="confTB">No sample</span><button class="mini" id="rstB" hidden title="Restore the detected pitch"><svg class="i" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 1 1 0 10H8M4 9l4-4M4 9l4 4"/></svg></button></div>
           <div class="atk" id="atkB" title="Pitch at the very start of the hit versus the settled body"></div>
           <div class="peaks" id="kB"></div>
         </div>

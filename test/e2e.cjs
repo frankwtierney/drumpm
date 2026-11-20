@@ -52,6 +52,18 @@ const path = require('node:path');
   const fine = await page.evaluate(() => document.getElementById('fine').value);
   console.log('wheel dial:', before, '->', after, '| fine slider:', fine);
   if (before === after || fine === '0') { console.log('FAIL wheel'); process.exit(1); }
+  // sample dial = manual pitch override: drag to the top of the ring (about 155 Hz), scroll up, then double-click to restore
+  const hzA = () => page.evaluate(() => window.__state.A.hz);
+  const detA = await hzA();
+  const knobA = page.locator('[data-knob=A]').locator('xpath=..'); const kb = await knobA.boundingBox(), kcx = kb.x + kb.width / 2, kcy = kb.y + kb.height / 2, kr = kb.width * 0.4;
+  await page.mouse.click(kcx, kcy); const afterCap = await hzA();            // a click on the centre cap must not change the pitch
+  await page.mouse.move(kcx, kcy - kr); await page.mouse.down(); await page.mouse.up(); const dragged = await hzA();
+  await knobA.hover(); await page.mouse.wheel(0, -100); const scrolled = await hzA();
+  const flagged = await page.evaluate(() => !document.getElementById('rstA').hidden);
+  await knobA.dblclick({ position: { x: kb.width / 2, y: kb.height * 0.1 } }); await page.waitForTimeout(300);
+  const restored = await hzA(); const flagGone = await page.evaluate(() => document.getElementById('rstA').hidden);
+  console.log('A dial: detected', detA.toFixed(1), '| cap click', afterCap.toFixed(1), '| dragged', dragged.toFixed(1), '| scrolled', scrolled.toFixed(1), '| restored', restored.toFixed(1));
+  if (afterCap !== detA || Math.abs(dragged - 155) > 8 || !(scrolled > dragged) || !flagged || Math.abs(restored - detA) > 0.01 || !flagGone) { console.log('FAIL dial override'); process.exit(1); }
   await page.click('#autoBtn'); await page.evaluate(() => { const f = document.getElementById('fine'); f.value = 0; f.dispatchEvent(new Event('input', { bubbles: true })); }); await page.waitForTimeout(500);
   const back = await page.evaluate(() => document.getElementById('tuner').dataset.s);
   console.log('tuner after auto:', back);

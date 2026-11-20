@@ -20,7 +20,7 @@ async function loadFile(slot, file) {
     const buf = await ac.decodeAudioData(await file.arrayBuffer());
     const channels = Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c).slice());
     const det = detectPitch(channels, buf.sampleRate);
-    state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz };
+    state[slot] = { name: file.name, sr: buf.sampleRate, channels, det, hz: det.hz, detHz: det.hz };
     manual = null;
     render(slot);
     await update();
@@ -31,31 +31,49 @@ async function loadFile(slot, file) {
 }
 
 /* ---------- per-sample view ---------- */
-function render(slot) {
-  const s = state[slot], d = s.det;
-  document.querySelector(`.zone[data-slot=${slot}]`).classList.add('has');
+// Everything that depends on the current pitch (detected or set by hand).
+function showPitch(slot) {
+  const s = state[slot], d = s.det, manualPitch = s.detHz != null && s.hz != null && Math.abs(s.hz - s.detHz) > 1e-6;
   $('p' + slot).textContent = d.hz ? d.note : 'N/A';
   $('cen' + slot).textContent = d.hz ? `${d.cents >= 0 ? '+' : ''}${d.cents} cents` : 'no pitch';
   $('hz' + slot).innerHTML = d.hz ? `${d.hz.toFixed(1)}<small>Hz</small>` : `&ndash;<small>Hz</small>`;
-  $('s' + slot).textContent = s.name;
-  $('conf' + slot).dataset.l = !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
-  $('confT' + slot).textContent = !d.hz ? 'No pitch found' : d.confidence > 0.75 ? 'Confident' : d.confidence > 0.45 ? 'Fairly sure' : 'Unsure, pick a partial';
+  $('conf' + slot).dataset.l = manualPitch ? 3 : !d.hz ? 0 : d.confidence > 0.75 ? 3 : d.confidence > 0.45 ? 2 : 1;
+  $('confT' + slot).textContent = manualPitch ? 'Set by hand' : !d.hz ? 'No pitch found' : d.confidence > 0.75 ? 'Confident' : d.confidence > 0.45 ? 'Fairly sure' : 'Unsure, pick a partial';
+  $('rst' + slot).hidden = !manualPitch;
   const k = $('k' + slot); k.textContent = '';
   if ((d.peaks || []).length) {
     const l = document.createElement('span'); l.className = 'lbl'; l.textContent = 'Pitch candidates:'; l.title = 'Detected frequency peaks. Click one to use it as the pitch.'; k.appendChild(l);
   }
   for (const p of d.peaks || []) {
-    const b = document.createElement('button'); b.className = Math.abs(p.hz - s.hz) < 0.01 ? 'sel' : '';
+    const b = document.createElement('button'); b.className = s.hz != null && Math.abs(p.hz - s.hz) < 0.01 ? 'sel' : '';
     b.textContent = p.hz.toFixed(0) + ' Hz'; b.title = `${p.hz.toFixed(1)} Hz (${p.db.toFixed(0)} dB). Click to use this pitch.`;
-    b.onclick = () => { s.hz = p.hz; Object.assign(s.det, describeHz(p.hz), { hz: p.hz }); render(slot); update(); };
+    b.onclick = () => commitPitch(slot, p.hz);
     k.appendChild(b);
   }
   setKnob(slot, d.hz);
-  s.attack = analyzeAttack(toMono(s.channels), s.sr, s.hz); s.spectro = null;
+  ['A', 'B'].forEach((k2) => state[k2] && drawSpectrum(k2));
+}
+
+// Set a sample's pitch by hand (dial, scroll, arrow keys, candidate chips). The light parts update at once;
+// attack analysis and the re-render wait until the hand stops moving.
+function commitPitch(slot, hz) {
+  const s = state[slot]; if (!s) return;
+  s.hz = Math.max(FMIN, Math.min(FMAX, hz));
+  Object.assign(s.det, describeHz(s.hz), { hz: s.hz });
+  showPitch(slot);
+  clearTimeout(s.settle);
+  s.settle = setTimeout(() => { s.attack = analyzeAttack(toMono(s.channels), s.sr, s.hz); s.spectro = null; showAttack(slot); if (s.view === 'spectro') drawSpectrum(slot); update(); }, 150);
+}
+
+function render(slot) {
+  const s = state[slot];
+  document.querySelector(`.zone[data-slot=${slot}]`).classList.add('has');
+  $('s' + slot).textContent = s.name;
+  s.attack = analyzeAttack(toMono(s.channels), s.sr, s.hz); s.spectro = null; s.rtaStatic = null;
   showAttack(slot);
-  s.rtaStatic = null;
-  ['A', 'B'].forEach((k) => state[k] && drawSpectrum(k));
+  showPitch(slot);
   drawWave(slot);
+  document.querySelector(`[data-knob=${slot}]`).parentElement.classList.add('live');
   $('play' + slot).disabled = $('ear' + slot).disabled = false;
 }
 
@@ -345,26 +363,39 @@ async function renderAudio() {
   window.__renderDone = (window.__renderDone || 0) + 1;
 }
 
-// Dial interaction: drag to set the shift by hand, arrows to nudge, double-click for auto.
+// Dials: drag around the ring, scroll, or use the arrow keys. Clicks on the centre cap are ignored.
+function dialDrag(el, ready, onDeg) {
+  let drag = false;
+  const geo = (e) => { const r = el.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); return { deg: Math.max(-135, Math.min(135, (Math.atan2(dx, -dy) * 180) / Math.PI)), rad: Math.hypot(dx, dy) / (r.width / 2) }; };
+  el.addEventListener('pointerdown', (e) => { if (!ready()) return; const g = geo(e); if (g.rad < 0.55) return; drag = true; el.setPointerCapture(e.pointerId); onDeg(g.deg, e); });
+  el.addEventListener('pointermove', (e) => { if (drag) onDeg(geo(e).deg, e); });
+  for (const t of ['pointerup', 'pointercancel']) el.addEventListener(t, () => { drag = false; });
+}
+const KEYDIR = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
+
+// Match dial: the total shift in semitones (-12..+12), including the fine trim.
 (() => {
-  const mk = $('mknob'); let dragging = false;
-  const ready = () => !!(state.A?.hz && state.B?.hz);
-  const fromEvent = (e) => {
-    const r = mk.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
-    const deg = Math.max(-135, Math.min(135, (Math.atan2(dx, -dy) * 180) / Math.PI));
-    return Math.round(((deg / 135) * 12 - Number($('fine').value) / 100) * 100) / 100;
-  };
-  mk.addEventListener('pointerdown', (e) => { if (!ready()) return; dragging = true; mk.setPointerCapture(e.pointerId); setManual(fromEvent(e)); });
-  mk.addEventListener('pointermove', (e) => { if (dragging) setManual(fromEvent(e)); });
-  mk.addEventListener('pointerup', () => { dragging = false; });
+  const mk = $('mknob'), ready = () => !!(state.A?.hz && state.B?.hz);
+  dialDrag(mk, ready, (deg) => setManual(Math.round(((deg / 135) * 12 - Number($('fine').value) / 100) * 100) / 100));
   mk.addEventListener('dblclick', () => { if (ready()) setManual(null); });
   mk.addEventListener('keydown', (e) => {
-    if (!ready()) return;
-    const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return;
+    const d = KEYDIR[e.key]; if (!d || !ready()) return;
     e.preventDefault(); setManual(Math.round(((manual ?? shiftAmount0()) + d * (e.shiftKey ? 1 : 0.1)) * 100) / 100);
   });
   $('autoBtn').onclick = () => setManual(null);
 })();
+
+// Sample dials: override the detected pitch by hand (log scale 30..800 Hz). Double-click or the reset button restores it.
+for (const slot of ['A', 'B']) {
+  const knob = document.querySelector(`[data-knob=${slot}]`).parentElement, ready = () => !!state[slot];
+  knob.tabIndex = 0; knob.title = 'Drag, scroll, or use the arrow keys to set the pitch by hand. Shift = bigger steps, Alt = finer. Double-click to restore the detected pitch.';
+  const nudge = (n, e) => { const s = state[slot]; if (s) commitPitch(slot, (s.hz || 100) * Math.pow(2, (n * (e.shiftKey ? 100 : e.altKey ? 1 : 10)) / 1200)); };
+  dialDrag(knob, ready, (deg) => commitPitch(slot, Math.round(FMIN * Math.pow(FMAX / FMIN, (deg + 135) / 270) * 10) / 10));
+  knob.addEventListener('dblclick', () => { if (state[slot]?.detHz) commitPitch(slot, state[slot].detHz); });
+  $('rst' + slot).onclick = () => { if (state[slot]?.detHz) commitPitch(slot, state[slot].detHz); };
+  knob.addEventListener('keydown', (e) => { const d = KEYDIR[e.key]; if (d) { e.preventDefault(); nudge(d, e); } });
+  onWheel(knob, nudge);
+}
 
 /* ---------- playback ---------- */
 function play(channels, sr, when = 0, slot = null, tag = '') {

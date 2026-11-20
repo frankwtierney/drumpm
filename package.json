@@ -4,7 +4,7 @@
   "description": "Detect the pitch of a drum sample and match another sample to it",
   "type": "module",
   "scripts": {
-    "test": "node --test test/detect.test.mjs test/attack.test.mjs test/key.test.mjs",
+    "test": "node --test test/detect.test.mjs test/attack.test.mjs test/key.test.mjs test/chords.test.mjs",
     "serve": "node serve.mjs"
   },
   "license": "MIT"

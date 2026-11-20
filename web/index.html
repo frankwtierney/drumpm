@@ -250,6 +250,23 @@
   .cand .cs { font:500 12px var(--font); color:var(--ink); }
   .cand .cf { font:400 11px var(--font); color:var(--dim); }
   .cand.sel { box-shadow:0 0 14px #c9ccff44, 0 0 0 1px #c9ccff; }
+
+  .keyrow label.grow { flex:1 1 220px; }
+  .keyrow input[type=text] { width:100%; font:500 13px var(--font); letter-spacing:.04em; color:var(--ink); padding:9px 16px; border:0; border-radius:999px; background:#12142499; box-shadow:0 2px 6px #000a inset, 0 1px 0 #ffffff14; outline:none; }
+  .keyrow input[type=text]:focus { box-shadow:0 2px 6px #000a inset, 0 0 0 1px #c9ccff; }
+  .proErr { margin-top:8px; font-size:12px; color:#ff9a7a; }
+  .chordstrip { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .chordstrip:empty { display:none; }
+  .chord { display:flex; flex-direction:column; align-items:center; min-width:54px; padding:6px 14px; border-radius:12px; background:#ffffff0d; box-shadow:0 0 0 1px #ffffff1f; cursor:default; }
+  .chord:hover { background:#ffb34726; box-shadow:0 0 0 1px #ffb347aa; }
+  .chord b { font:600 15px var(--font); color:#fff; } .chord i { font:italic 400 11px var(--font); color:var(--dim); min-height:14px; }
+  #kbd { display:block; width:100%; margin-top:12px; cursor:pointer; border-radius:12px; background:#12142455; touch-action:manipulation; }
+  .kblegend { display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:8px; font-size:11px; color:var(--dim); }
+  .kblegend .dim { margin-left:auto; } .kblegend span { display:inline-flex; align-items:center; gap:6px; }
+  .lg { width:12px; height:12px; border-radius:3px; display:inline-grid; place-items:center; font:700 8px var(--font); font-style:normal; }
+  .lg.k { background:#b9bdf8; } .lg.g { background:#34d58a; } .lg.r { background:#6ff2a8; color:#0e1a14; border-radius:50%; width:14px; height:14px; } .lg.t { box-shadow:0 0 0 2px #c9ccff; background:#dfe1f0; }
+  .kbinfo { margin-top:10px; font-size:13px; color:var(--ink); min-height:20px; }
+  .kbinfo b { color:#fff; font-weight:600; } .kbinfo .mut { color:var(--dim); }
 </style>
 </head>
 <body>
@@ -373,17 +390,23 @@
     </section>
   </div>
 
-  <details class="card keybar" id="keybar">
+  <details class="card keybar" id="keybar" open>
     <summary><span class="ks"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Tune to a song key</span><span class="kstat" id="keyStat">Off</span><svg class="i chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></summary>
     <div class="keybody">
       <div class="keyrow">
         <label>Key<select id="keyRoot" title="The song's key"></select></label>
         <label>Scale<select id="keyScale"></select></label>
-        <label>Tune B as<select id="keyRole" title="Sets the range and which scale notes suit the drum. Chosen from B's pitch when it loads."></select></label>
+        <label>Tune B as<select id="keyRole" title="Sets the range and which notes suit the drum. Chosen from B's pitch when it loads."></select></label>
+        <label class="grow">Chords<input id="prog" type="text" spellcheck="false" autocomplete="off" placeholder="Am F C G   or   i VI III VII" title="Chord names (Am F C G7 Dm7) or Roman numerals (i VI III VII). Numerals need a key."></label>
+        <label>Presets<select id="progPreset" title="Fill in a common progression as numerals"></select></label>
         <div class="ktarget" id="keyTarget" hidden><span id="ktT"></span><button id="ktX" title="Go back to matching sample A"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       </div>
-      <div class="keynote" id="keyNote">Pick a key to see which notes B can be tuned to.</div>
-      <div class="cands" id="keyCands"></div>
+      <div class="proErr" id="progErr" hidden></div>
+      <div class="chordstrip" id="chordStrip"></div>
+      <div class="keynote" id="keyNote">Pick a key, type a chord progression, or both. The keys light up for notes that fit.</div>
+      <canvas id="kbd" role="img" aria-label="Piano keyboard. Lit keys fit the key and chords. Click a key to tune B to it."></canvas>
+      <div class="kblegend"><span><i class="lg k"></i>in the key</span><span><i class="lg g"></i>chord tone (brighter = more chords)</span><span><i class="lg r">1</i>best fits</span><span><i class="lg t"></i>target</span><span class="dim">Click any key to tune B to it</span></div>
+      <div class="kbinfo" id="kbInfo"></div>
     </div>
   </details>
   <div class="tip">Tip: drop two files anywhere on the window at once. The first becomes A, the second B.</div>

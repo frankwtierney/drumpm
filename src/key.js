@@ -45,21 +45,49 @@ const rangeFactor = (f, { sweet, allowed }) => {
 };
 const shiftFactor = (st) => 1 / (1 + Math.pow(Math.abs(st) / 5, 2)); // big shifts cost character, so small ones rank higher
 
+// How well a chord tone of each kind suits each role, and what a scale note outside the chord is worth.
+const CW = {
+  kick: { root: 1, '5th': .9, '3rd': .3, '7th': .2, ext: .15, none: .12 },
+  snare: { root: .85, '5th': 1, '3rd': .95, '7th': .4, ext: .3, none: .15 },
+  tom: { root: .8, '5th': 1, '3rd': .95, '7th': .4, ext: .3, none: .15 },
+  any: { root: 1, '5th': .9, '3rd': .8, '7th': .45, ext: .3, none: .15 },
+};
+
 /**
- * Notes in `rootPc` + `scale` that suit `role`, ranked by fit and by how little `hz` has to move.
- * Returns [{ note, hz, midi, shift, interval, inSweet, bigShift, score }] best first.
+ * Notes that suit `role`, ranked by fit and by how little `hz` has to move.
+ * - With a key: scale tones, weighted by their degree.
+ * - With chords (from parseProgression): each note is scored in every chord (root / 3rd / 5th / 7th / not a chord tone), combining the
+ *   average with the worst chord, so a note that works across the whole progression beats one that only suits a single chord.
+ * Returns [{ note, hz, midi, shift, interval, inKey, fit:{covered,total,per}, inSweet, bigShift, score }] best first.
  */
-export function suggestTunings(hz, { rootPc, scale = 'minor', role = 'snare' }, { limit = 8, maxShift = 12 } = {}) {
-  if (!hz || rootPc == null) return [];
-  const steps = SCALES[scale].steps, r = ROLES[role], w = W[role], out = [];
+export function suggestTunings(hz, { rootPc, scale = 'minor', role = 'snare', chords = [] }, { limit = 8, maxShift = 12 } = {}) {
+  const haveKey = rootPc != null, haveChords = chords.length > 0;
+  if (!hz || (!haveKey && !haveChords)) return [];
+  const steps = SCALES[scale].steps, r = ROLES[role], w = W[role], cw = CW[role], out = [];
   for (let m = Math.ceil(hzToMidi(r.allowed[0])); m <= Math.floor(hzToMidi(r.allowed[1])); m++) {
-    const pc = (((m - rootPc) % 12) + 12) % 12;
-    if (!steps.includes(pc)) continue;
+    const pc = ((m % 12) + 12) % 12, rel = haveKey ? (((pc - rootPc) % 12) + 12) % 12 : 0;
+    const inKey = haveKey && steps.includes(rel), covered = haveChords ? chords.filter((c) => c.roles[pc]).length : 0;
+    if (haveKey ? !(inKey || covered) : !covered) continue;           // outside the key and in no chord: not a candidate
     const f = midiToHz(m), shift = 12 * Math.log2(f / hz);
     if (Math.abs(shift) > maxShift) continue;
-    const rf = rangeFactor(f, r), score = w[pc] * rf * shiftFactor(shift);
+    let fitScore;
+    const per = [];
+    if (haveChords) {
+      const ws = chords.map((c) => { const role2 = c.roles[pc]; per.push(role2 ? `${role2} of ${c.symbol}` : null); return role2 ? cw[role2] : inKey ? cw.none : 0; });
+      const mean = ws.reduce((a, b) => a + b, 0) / ws.length, min = Math.min(...ws);
+      fitScore = 0.65 * mean + 0.35 * min;
+      if (haveKey) fitScore = 0.75 * fitScore + 0.25 * (inKey ? w[rel] : 0.1);
+    } else fitScore = w[rel];
+    const rf = rangeFactor(f, r), score = fitScore * rf * shiftFactor(shift);
     if (score <= 0) continue;
-    out.push({ note: describeHz(f).note, hz: f, midi: m, shift, interval: INTERVAL_NAMES[pc], inSweet: f >= r.sweet[0] && f <= r.sweet[1], bigShift: Math.abs(shift) > 5, score });
+    out.push({ note: describeHz(f).note, hz: f, midi: m, shift, interval: haveKey ? INTERVAL_NAMES[rel] : null, inKey, fit: { covered, total: chords.length, per }, inSweet: f >= r.sweet[0] && f <= r.sweet[1], bigShift: Math.abs(shift) > 5, score });
   }
   return out.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/** Per pitch class (0..11): how many of the chords contain it, used to light the keyboard. */
+export function chordCoverage(chords) {
+  const cov = new Array(12).fill(0);
+  for (const c of chords) for (const pc of c.tones) cov[pc]++;
+  return cov;
 }

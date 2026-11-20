@@ -1,6 +1,8 @@
-import { detectPitch, matchSemitones, describeHz, spectrum, toMono, findOnset } from '../src/detect.js';
+import { detectPitch, matchSemitones, describeHz, midiToHz, spectrum, toMono, findOnset } from '../src/detect.js';
 import { analyzeAttack, applyAttackContour } from '../src/attack.js';
-import { SCALES, ROOTS, ROLES, suggestTunings, guessRole } from '../src/key.js';
+import { SCALES, ROOTS, ROLES, suggestTunings, guessRole, chordCoverage } from '../src/key.js';
+import { parseProgression } from '../src/chords.js';
+import { createKeyboard, semitoneBands, KB_RANGE } from './keyboard.js';
 import { stretchShift, varispeed, keepTransient, encodeWav, zipStore } from './shift.js';
 
 const $ = (id) => document.getElementById(id);
@@ -202,15 +204,20 @@ function rtaFrame() {
   const now = ac.currentTime;
   rta.events = rta.events.filter((e) => e.t1 > now);
   const act = [...rta.events].reverse().find((e) => now >= e.t0 && now <= e.t1);
-  const nowShown = new Set();
-  if (act && state[act.slot].view !== 'spectro') {
+  const nowShown = new Set(); let kbLive = null;
+  if (act) {
     analyser.getFloatFrequencyData(fftBuf);
-    const live = bands(fftBuf, ac.sampleRate / analyser.fftSize, -80, -8);
-    rta.lastMax = Math.max(...live);
-    if (!rta.shown.has(act.slot)) rta.peaks[act.slot].fill(0);
-    drawSpectrum(act.slot, live, act.tag); nowShown.add(act.slot);
+    const binHz = ac.sampleRate / analyser.fftSize;
+    kbLive = { vals: semitoneBands(fftBuf, binHz, -80, -8), color: act.tag === 'matched' ? '#c9ccff' : act.slot === 'A' ? '#ff8a1f' : '#4fe3f0' };
+    if (state[act.slot].view !== 'spectro') {
+      const live = bands(fftBuf, binHz, -80, -8);
+      rta.lastMax = Math.max(...live);
+      if (!rta.shown.has(act.slot)) rta.peaks[act.slot].fill(0);
+      drawSpectrum(act.slot, live, act.tag); nowShown.add(act.slot);
+    }
   }
   for (const sl of rta.shown) if (!nowShown.has(sl)) drawSpectrum(sl); // back to the static view
+  if (typeof kb !== 'undefined') { if (kbLive) kb.setLive(kbLive.vals, kbLive.color); else if (rta.kbWasLive) kb.setLive(null); rta.kbWasLive = !!kbLive; }
   rta.shown = nowShown;
   if (rta.events.length || nowShown.size) rta.raf = requestAnimationFrame(rtaFrame);
 }
@@ -533,37 +540,90 @@ for (const [id, step, big] of [['fine', 1, 10], ['atk', 1, 5]]) {
   });
 }
 
-/* ---------- key suggestions: which notes can B be tuned to, for this key and drum? ---------- */
-const key = { roleTouched: false };
+/* ---------- key + chords: which notes can B be tuned to? ---------- */
+const key = { roleTouched: false, hover: null, list: [], cfg: null, chords: [] };
+const PRESETS = ['I V vi IV', 'I vi IV V', 'I IV V', 'ii V I', 'vi IV I V', 'i VI III VII', 'i iv v', 'i \u266DVII \u266DVI V'];
 (() => {
   $('keyRoot').innerHTML = '<option value="">Choose\u2026</option>' + ROOTS.map((r, i) => `<option value="${i}">${r}</option>`).join('');
   $('keyScale').innerHTML = Object.entries(SCALES).map(([k, v]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${v.label}</option>`).join('');
   $('keyRole').innerHTML = Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === 'snare' ? ' selected' : ''}>${v.label}</option>`).join('');
+  $('progPreset').innerHTML = '<option value="">Choose\u2026</option>' + PRESETS.map((p2) => `<option>${p2}</option>`).join('');
   $('keyRole').addEventListener('change', () => { key.roleTouched = true; });
   for (const id of ['keyRoot', 'keyScale', 'keyRole']) $(id).addEventListener('change', () => renderKey());
+  $('prog').addEventListener('input', () => { clearTimeout(key.t); key.t = setTimeout(renderKey, 180); });
+  $('progPreset').addEventListener('change', () => { if ($('progPreset').value) { $('prog').value = $('progPreset').value; $('progPreset').value = ''; renderKey(); } });
   $('ktX').onclick = () => { state.target = null; manual = null; update(); renderKey(); };
 })();
 
+const midiOfHz = (hz) => Math.round(69 + 12 * Math.log2(hz / 440));
+function staticSemis(sl) { // B's analysis-window spectrum on the keyboard's note axis (for the ghost bars)
+  const x = toMono(sl.channels), on = findOnset(x, 0.1), seg = x.subarray(on + Math.round(0.025 * sl.sr), on + Math.round(0.175 * sl.sr));
+  if (seg.length < 512) return null;
+  const { mag, binHz } = spectrum(seg, sl.sr, 4); let mx = 0; for (let i = 0; i < mag.length; i++) mx = Math.max(mx, mag[i]);
+  return semitoneBands(Float32Array.from(mag, (m) => 20 * Math.log10(m / mx + 1e-9)), binHz, -60, 0);
+}
+
+// What a key means for B: its note, the shift it needs, where it sits in the key, and how it fits each chord.
+function describeKeyNote(m) {
+  const B = state.B, cfg = key.cfg; if (!B?.hz || !cfg) return '';
+  const hz = midiToHz(m), shift = 12 * Math.log2(hz / B.hz), pc = ((m % 12) + 12) % 12, r = ROLES[cfg.role];
+  const parts = [`<b>${describeHz(hz).note}</b> <span class="mut">${hz.toFixed(1)} Hz</span> \u00b7 ${shift >= 0 ? 'shifts B up' : 'shifts B down'} ${Math.abs(shift).toFixed(2)} st`];
+  if (cfg.rootPc != null) { const rel = (pc - cfg.rootPc + 12) % 12, inKey = SCALES[cfg.scale].steps.includes(rel); parts.push(inKey ? `${INTERVALS[rel]} of the key` : '<span class="mut">outside the key</span>'); }
+  if (key.chords.length) {
+    const per = key.chords.map((c) => (c.roles[pc] ? `${c.roles[pc]} of ${c.symbol}` : null)), n = per.filter(Boolean).length;
+    parts.push(`<b>${n}/${key.chords.length}</b> chords${n ? ` <span class="mut">(${per.filter(Boolean).join(', ')})</span>` : ''}`);
+  }
+  if (hz < r.allowed[0] || hz > r.allowed[1]) parts.push(`<span class="mut">outside a ${r.label.toLowerCase()}\u2019s range</span>`);
+  else if (hz < r.sweet[0] || hz > r.sweet[1]) parts.push('<span class="mut">edge of the range</span>');
+  const rank = key.list.findIndex((c) => c.midi === m); if (rank >= 0) parts.push(`<b>#${rank + 1}</b> suggestion`);
+  return parts.join(' \u00b7 ');
+}
+const INTERVALS = ['root', '\u266D2nd', '2nd', '\u266D3rd', '3rd', '4th', '\u266F4th', '5th', '\u266D6th', '6th', '\u266D7th', '7th'];
+
 function renderKey() {
-  const B = state.B, root = $('keyRoot').value, cfg = { rootPc: root === '' ? null : Number(root), scale: $('keyScale').value, role: $('keyRole').value };
-  const tgt = state.target, box = $('keyCands'), note = $('keyNote');
-  $('keyStat').textContent = tgt ? `Target ${tgt.name}` : cfg.rootPc == null ? 'Off' : `${ROOTS[cfg.rootPc].split('/')[0]} ${SCALES[cfg.scale].label.toLowerCase()} \u00b7 ${ROLES[cfg.role].label}`;
+  const B = state.B, root = $('keyRoot').value, tgt = state.target;
+  const cfg = key.cfg = { rootPc: root === '' ? null : Number(root), scale: $('keyScale').value, role: $('keyRole').value };
+  const steps = SCALES[cfg.scale].steps, { chords, errors } = parseProgression($('prog').value, { rootPc: cfg.rootPc, steps });
+  key.chords = chords;
+  $('progErr').hidden = !errors.length; if (errors.length) $('progErr').textContent = `Couldn\u2019t read: ${errors.join(', ')}`;
+  const strip = $('chordStrip'); strip.textContent = '';
+  chords.forEach((c) => {
+    const el = document.createElement('div'); el.className = 'chord'; el.innerHTML = `<b>${c.symbol.split('/')[0]}</b><i>${c.numeral || ''}</i>`;
+    el.title = `${c.symbol}: ${c.tones.map((t) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][t]).join(' ')}. Hover to see its notes on the keyboard.`;
+    el.onmouseenter = () => kb.set({ hoverTones: new Set(c.tones) }); el.onmouseleave = () => kb.set({ hoverTones: null });
+    strip.appendChild(el);
+  });
+  const keyName = cfg.rootPc == null ? '' : `${ROOTS[cfg.rootPc].split('/')[0]} ${SCALES[cfg.scale].label.toLowerCase()}`;
+  $('keyStat').textContent = tgt ? `Target ${tgt.name}` : [keyName, chords.length ? `${chords.length} chords` : '', cfg.rootPc != null || chords.length ? ROLES[cfg.role].label : ''].filter(Boolean).join(' \u00b7 ') || 'Off';
   $('keyTarget').hidden = !tgt;
   if (tgt) $('ktT').textContent = `Matching B to ${tgt.name} (${tgt.hz.toFixed(1)} Hz), not sample A`;
-  box.textContent = '';
-  if (cfg.rootPc == null) { note.textContent = 'Pick a key to see which notes B can be tuned to.'; return; }
-  if (!B?.hz) { note.textContent = 'Drop sample B to see which notes it can be tuned to.'; return; }
-  const list = suggestTunings(B.hz, cfg), r = ROLES[cfg.role];
-  note.textContent = list.length
-    ? `Best fits for a ${r.label.toLowerCase()} in this key, ranked by how well they suit the drum and how little B has to move. Typical range ${r.sweet[0]}\u2013${r.sweet[1]} Hz. Click one, then use Loop to hear it. Treat these as suggestions.`
-    : 'No notes in this key fall inside that drum\u2019s range within 12 semitones of B.';
-  for (const c of list) {
-    const b = document.createElement('button'); b.className = 'cand' + (tgt && Math.abs(tgt.hz - c.hz) < 0.01 ? ' sel' : '');
-    const good = ['root', '5th', '3rd', '\u266D3rd'].includes(c.interval);
-    b.innerHTML = `<span class="cn">${c.note}</span><span class="cd${good ? ' good' : ''}">${c.interval}</span><span class="cs">${c.shift >= 0 ? '+' : '\u2212'}${Math.abs(c.shift).toFixed(2)} st</span><span class="cf">${c.hz.toFixed(1)} Hz${c.inSweet ? '' : ' \u00b7 edge of range'}${c.bigShift ? ' \u00b7 big shift' : ''}</span>`;
-    b.title = `${c.note}, the ${c.interval} of the key. ${c.shift >= 0 ? 'Shifts B up' : 'Shifts B down'} ${Math.abs(c.shift).toFixed(2)} semitones.`;
-    b.onclick = () => { state.target = { hz: c.hz, name: c.note }; manual = null; update(); renderKey(); };
-    box.appendChild(b);
-  }
+
+  key.list = B?.hz ? suggestTunings(B.hz, { ...cfg, chords }) : [];
+  const r = ROLES[cfg.role], cands = new Map(key.list.map((c, i) => [c.midi, { rank: i + 1, c }]));
+  kb.set({
+    inKey: cfg.rootPc == null ? null : new Set(steps.map((x) => (cfg.rootPc + x) % 12)),
+    cov: chords.length ? chordCoverage(chords) : null, nChords: chords.length, cands,
+    target: tgt ? tgt.midi ?? midiOfHz(tgt.hz) : null,
+    range: [Math.ceil(69 + 12 * Math.log2(r.allowed[0] / 440)), Math.floor(69 + 12 * Math.log2(r.allowed[1] / 440))],
+    markers: [{ hz: B?.hz, label: 'B', color: '#4fe3f0' }, { hz: state.A?.hz, label: 'A', color: '#ff8a1f' }, ...(tgt ? [{ hz: tgt.hz, label: tgt.name, color: '#c9ccff' }] : [])],
+    ghost: B ? staticSemis(B) : null,
+  });
+  showKbInfo();
+  $('keyNote').textContent = !B?.hz ? 'Drop sample B to see which notes it can be tuned to.' : cfg.rootPc == null && !chords.length ? 'Pick a key, type a chord progression, or both. The keys light up for notes that fit.' : `Typical ${r.label.toLowerCase()} range ${r.sweet[0]}\u2013${r.sweet[1]} Hz (darker keys are out of range). Treat these as suggestions and check by ear with Loop.`;
 }
+
+function showKbInfo() {
+  const el = $('kbInfo'), tgt = state.target;
+  if (key.hover != null) { el.innerHTML = describeKeyNote(key.hover); return; }
+  if (tgt) { el.innerHTML = `Target: ${describeKeyNote(tgt.midi ?? midiOfHz(tgt.hz))}`; return; }
+  const c = key.list[0];
+  el.innerHTML = c ? `Best fit: ${describeKeyNote(c.midi)}` : '';
+}
+
+const kb = createKeyboard($('kbd'), {
+  onHover: (m) => { key.hover = m; showKbInfo(); },
+  onPick: (m) => { if (!state.B?.hz) return; const hz = midiToHz(m); state.target = { hz, name: describeHz(hz).note, midi: m }; manual = null; update(); renderKey(); },
+});
+$('keybar').addEventListener('toggle', () => kb.draw());
+window.__kb = { centerOf: (m) => kb.centerOf(m), list: () => key.list.map((c) => ({ note: c.note, midi: c.midi, covered: c.fit.covered, total: c.fit.total })), chords: () => key.chords.map((c) => c.symbol) };
 renderKey();

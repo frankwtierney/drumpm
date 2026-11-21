@@ -77,7 +77,7 @@ export function numeralFor(chord, keyPc, steps) {
  */
 export function parseProgression(text, key = {}) {
   const chords = [], errors = [], steps = key.steps || MAJOR_STEPS;
-  for (const tok of String(text || '').split(/[\s,|>→-]+/).filter(Boolean)) {
+  for (const tok of String(text || '').split(/[\s,|>\u2192\u00B7\u2022-]+/).filter(Boolean)) {
     let c = parseSymbol(tok);
     if (!c) {
       if (/^[b#♭♯]?[IiVv]/.test(tok)) {

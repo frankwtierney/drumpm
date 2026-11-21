@@ -46,7 +46,7 @@ const path = require('node:path');
   out.presetLabels = presetLabels.slice(0, 3);
   console.log(JSON.stringify(out, null, 1));
   await browser.close(); srv.kill();
-  const ok = out.before === '' && out.filled === 'i VI III VII' && out.cards.join(' ') === 'Am/i F/VI C/III G/VII'
+  const ok = out.before === '' && out.filled === 'i \u00b7 VI \u00b7 III \u00b7 VII' && out.cards.join(' ') === 'Am/i F/VI C/III G/VII'
     && out.cMinor.join(' ') === 'Cm/i Ab/VI Eb/III Bb/VII' && out.cMajor.join(' ') === 'C/I G/V Am/vi F/IV'
     && out.preset.join(' ') === 'C/I Am/vi F/IV G/V' && out.afterDrag.join(' ') === 'Am/vi F/IV C/I G/V'
     && out.dialogOpen && out.wedges === 24 && out.palette.length === 7 && out.afterPick.some((x) => x.startsWith('F/'))

@@ -551,18 +551,20 @@ const PRESETS = {
 };
 // The progression lives in the text box as a list of tokens (names or numerals). Cards, drag, and the picker all edit that list.
 const keyParam = () => { const root = $('keyRoot').value, scale = $('keyScale').value; return { rootPc: root === '' ? null : Number(root), scale, steps: parentSteps(scale) }; };
-const progTokens = () => $('prog').value.split(/[\s,|>\u2192-]+/).filter(Boolean);
-function setProg(tokens) { $('prog').value = tokens.join(' '); key.progIsDefault = false; key.progTouched = true; renderKey(); }
+const progTokens = () => $('prog').value.split(/[\s,|>\u2192\u00B7\u2022-]+/).filter(Boolean);
+const fmtProg = (tokens) => tokens.join(' \u00b7 ');                       // chords read as  i \u00b7 VI \u00b7 III \u00b7 VII
+function setProg(tokens) { $('prog').value = fmtProg(tokens); key.progIsDefault = false; key.progTouched = true; renderKey(); }
 // Picking a key fills in a starting progression, unless you have already written or changed one.
 function maybeDefaultProg() {
   const k = keyParam(); if (k.rootPc == null) return;
-  if (key.progIsDefault || (!key.progTouched && !$('prog').value.trim())) { $('prog').value = DEFAULT_PROG[k.scale]; key.progIsDefault = true; }
+  if (key.progIsDefault || (!key.progTouched && !$('prog').value.trim())) { $('prog').value = fmtProg(DEFAULT_PROG[k.scale].split(' ')); key.progIsDefault = true; }
 }
 function buildPresets() {
   const k = keyParam(), list = MINORISH.includes(k.scale) ? PRESETS.minor : PRESETS.major;
   $('progPreset').innerHTML = '<option value="">Choose\u2026</option>' + list.map(([label, nums]) => {
     const names = k.rootPc == null ? '' : parseProgression(nums, k).chords.map((c) => c.symbol).join(' ');
-    return `<option value="${nums}">${label}: ${names || nums}${names ? `  (${nums})` : ''}</option>`;
+    const dotted = nums.split(' ').join(' \u00b7 ');
+    return `<option value="${nums}">${label}: ${names ? names.split(' ').join(' \u00b7 ') : dotted}${names ? `  (${dotted})` : ''}</option>`;
   }).join('');
 }
 (() => {
@@ -572,8 +574,9 @@ function buildPresets() {
   $('keyRole').addEventListener('change', () => { key.roleTouched = true; });
   for (const id of ['keyRoot', 'keyScale']) $(id).addEventListener('change', () => { maybeDefaultProg(); buildPresets(); renderKey(); });
   $('keyRole').addEventListener('change', () => renderKey());
+  $('prog').addEventListener('blur', () => { const t = progTokens(); if (t.length) $('prog').value = fmtProg(t); });   // tidy the separators when you leave the box
   $('prog').addEventListener('input', () => { key.progIsDefault = false; key.progTouched = true; clearTimeout(key.t); key.t = setTimeout(renderKey, 180); });
-  $('progPreset').addEventListener('change', () => { if ($('progPreset').value) { $('prog').value = $('progPreset').value; key.progIsDefault = false; key.progTouched = true; $('progPreset').value = ''; renderKey(); } });
+  $('progPreset').addEventListener('change', () => { if ($('progPreset').value) { $('prog').value = fmtProg($('progPreset').value.split(' ')); key.progIsDefault = false; key.progTouched = true; $('progPreset').value = ''; renderKey(); } });
   $('ktX').onclick = () => { state.target = null; manual = null; update(); renderKey(); };
   buildPresets();
 })();

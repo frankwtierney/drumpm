@@ -252,6 +252,7 @@
   .cand.sel { box-shadow:0 0 14px #c9ccff44, 0 0 0 1px #c9ccff; }
 
   .keyrow label.grow { flex:1 1 220px; }
+  .keyrow #progPreset { width:190px; text-overflow:ellipsis; }
   .keyrow input[type=text] { width:100%; font:500 13px var(--font); letter-spacing:.04em; color:var(--ink); padding:9px 16px; border:0; border-radius:999px; background:#12142499; box-shadow:0 2px 6px #000a inset, 0 1px 0 #ffffff14; outline:none; }
   .keyrow input[type=text]:focus { box-shadow:0 2px 6px #000a inset, 0 0 0 1px #c9ccff; }
   .proErr { margin-top:8px; font-size:12px; color:#ff9a7a; }
@@ -427,7 +428,7 @@
         <label>Key<select id="keyRoot" title="The song's key"></select></label>
         <label>Scale<select id="keyScale"></select></label>
         <label>Tune B as<select id="keyRole" title="Sets the range and which notes suit the drum. Chosen from B's pitch when it loads."></select></label>
-        <label class="grow">Chords <span class="hintl">(drag to reorder, click to change)</span><input id="prog" type="text" spellcheck="false" autocomplete="off" placeholder="Am F C G   or   i VI III VII" title="Chord names (Am F C G7 Dm7) or Roman numerals (i VI III VII). Numerals need a key."></label>
+        <label class="grow">Chords <span class="hintl">(drag to reorder, click to change)</span><input id="prog" type="text" spellcheck="false" autocomplete="off" placeholder="Am · F · C · G    or    i · VI · III · VII" title="Chord names (Am F C G7 Dm7) or Roman numerals (i VI III VII). Numerals need a key."></label>
         <label>Progression<select id="progPreset" title="Pick a common progression. It fills in the chords for your key, and you can then change any of them."></select></label>
         <div class="ktarget" id="keyTarget" hidden><span id="ktT"></span><button id="ktX" title="Go back to matching sample A"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       </div>

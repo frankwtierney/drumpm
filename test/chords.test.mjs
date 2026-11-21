@@ -84,3 +84,9 @@ test('chord symbols and tokens round-trip through the parser', () => {
   assert.deepEqual(describeChord(parseProgression('Bm7b5').chords[0]), { rootPc: 11, quality: 'dim', ext: '7th' });
   assert.deepEqual(describeChord(parseProgression('Am').chords[0]), { rootPc: 9, quality: 'm', ext: 'triad' });
 });
+
+test('dots and other separators between chords all work', () => {
+  for (const text of ['Am \u00b7 F \u00b7 C \u00b7 G', 'Am\u00b7F\u00b7C\u00b7G', 'Am F C G', 'Am, F, C, G', 'Am | F | C | G', 'Am \u2022 F \u2022 C \u2022 G']) {
+    assert.deepEqual(parseProgression(text).chords.map((c) => c.symbol), ['Am', 'F', 'C', 'G'], text);
+  }
+});
